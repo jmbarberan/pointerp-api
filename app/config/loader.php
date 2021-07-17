@@ -2,12 +2,30 @@
 
 $loader = new \Phalcon\Loader();
 
+$dirs = [
+    $config->application->controllersDir,
+    $config->application->modelsDir,
+    $config->application->modMaestrosDir,
+    $config->application->modVentasDir,
+    $config->application->modInventariosDir,
+    $config->application->rutasDir,
+    $config->application->libraryDir,
+];
+
+$names = [
+    'Pointerp\Controladores' => '../app/controllers/',
+    'Pointerp\Modelos' => '../app/models/',
+    'Pointerp\Modelos\Maestros' => '../app/models/maestros',
+    'Pointerp\Modelos\Inventarios' => '../app/models/inventarios',
+    'Pointerp\Modelos\Ventas' => '../app/models/ventas',
+    'Pointerp\Rutas' => '../app/rutas/',
+    'Pointerp\Library' => '../app/library/',
+];
+
 /**
- * We're a registering a set of directories taken from the configuration file
+ * Se registran los directorios y nombres tomados del archivo de configuracion
  */
-$loader->registerDirs(
-    [
-        $config->application->controllersDir,
-        $config->application->modelsDir
-    ]
-)->register();
+$loader->registerDirs($dirs);
+$loader->registerNamespaces($names, true);
+
+$loader->register();

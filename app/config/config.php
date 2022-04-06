@@ -7,9 +7,9 @@ return new \Phalcon\Config([
     'database' => [
         'adapter'     => 'Mysql',
         'host'        => 'localhost',
-        'username'    => $_ENV['DB_USER'],
-        'password'    => $_ENV['DB_PASS'],
-        'dbname'      => $_ENV['DB_NAME'],
+        'username'    => getenv('DB_USER'),
+        'password'    => getenv('DB_PASS'),
+        'dbname'      => getenv('DB_NAME'),
         'charset'     => 'utf8',
         'port'        => 3306
     ],

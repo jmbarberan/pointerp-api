@@ -7,9 +7,9 @@ return new \Phalcon\Config([
     'database' => [
         'adapter'     => 'Mysql',
         'host'        => 'localhost', /*remotemysql.com*/
-        'username'    => 'poinspve_iceq', /* xGFTTKOdxu */
-        'password'    => 'Caricatur@55', /* qiey26GcaO */
-        'dbname'      => 'poinspve_prueba', /* xGFTTKOdxu */
+        'username'    => $_ENV["DB_USER"], 
+        'password'    => $_ENV["DB_PASS"], 
+        'dbname'      => $_ENV["DB_NAME"], 
         'charset'     => 'utf8',
         'port'        => 3306
     ],

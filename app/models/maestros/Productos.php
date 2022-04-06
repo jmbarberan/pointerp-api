@@ -54,6 +54,17 @@ class Productos extends Modelo {
     if ($this->relPrecios != null) {   
       $res['relPrecios'] = $this->relPrecios->toArray();
     }
+    if ($this->relImposiciones != null) {   
+      $items = [];
+      foreach ($this->relImposiciones as $it) {
+        if ($it->relImpuesto != null) {
+          $ins = $it->toArray();
+          $ins['relImpuesto'] = $it->relImpuesto->toArray();
+          array_push($items, $ins);
+        }
+      }
+      $res['relImposiciones'] = $items;
+    }
     return $res;
   }
 }

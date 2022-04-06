@@ -33,7 +33,7 @@ class AjustesController extends ControllerBase  {
     $res = Registros::find([
         'conditions' => 'TablaId = :tid:',
         'bind' => ['tid' => $tabla,],
-        'order' => 'indice'
+        'order' => 'Indice'
     ]);
 
     if ($res->count() > 0) {

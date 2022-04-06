@@ -4,6 +4,7 @@ namespace Pointerp\Modelos\Inventarios;
 
 use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
+use Pointerp\Modelos\Sucursales;
 use Pointerp\Modelos\inventarios\Bodegas;
 use Pointerp\Modelos\inventarios\MovimientosItems;
 

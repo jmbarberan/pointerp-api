@@ -5,6 +5,8 @@ namespace Pointerp\Controladores;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Maestros\Productos;
+use Pointerp\Modelos\Maestros\ProductosPrecios;
+use Pointerp\Modelos\Maestros\ProductosImposiciones;
 use Pointerp\Modelos\Inventarios\Bodegas;
 use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Inventarios\Movimientos;
@@ -78,6 +80,27 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
+
+  public function productosEmpresaEstadoAction() {
+    $this->view->disable();
+    $estado = $this->dispatcher->getParam('estado');
+    $empresa = $this->dispatcher->getParam('empresa');
+    $res = Productos::find([
+      'conditions' => 'EmpresaId = :emp: AND Estado = :est:',
+      'bind' => [ 'emp' => $empresa, 'est' => $estado ],
+      'order' => 'Nombre'
+    ]);
+
+    if ($res->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
   public function productoRegistradoAction() {
     $cod = $this->dispatcher->getParam('cod');
     $nom = $this->dispatcher->getParam('nom');
@@ -132,7 +155,52 @@ class InventariosController extends ControllerBase  {
         $prd->Estado = $datos->Estado;
         if($prd->update()) {
           // Eliminar lineas anteriores de precios
-          // Crear lineas nuevas de precios
+          foreach ($datos->relPreciosEliminados as $peli) {
+            $precioeli = ProductosPrecios::findById($peli->Id);
+            $precioeli->delete();
+          }
+          // Crear lineas nuevas de precios y actualizar actualizadas
+          foreach($datos->relPrecios as $pre) {
+            if ($pre->Id > 0) {
+              $insp = ProductosPrecios::findFirstById($pre->Id);
+              $insp->ProductoId = $pre->ProductoId;
+              $insp->Precio = $pre->Precio;
+              $insp->VolumenCondicion = $pre->VolumenCondicion;
+              $insp->MinimoCondicion = $pre->MinimoCondicion;
+              $insp->update();
+            } else {
+              $insp = new ProductosPrecios();
+              $insp->ProductoId = $pre->ProductoId;
+              $insp->Precio = $pre->Precio;
+              $insp->VolumenCondicion = $pre->VolumenCondicion;
+              $insp->MinimoCondicion = $pre->MinimoCondicion;
+              $insp->create();
+            }
+          }
+          // Traer imposisiones existentes
+          $pivas = ProductosImposiciones::find([
+            'conditions' => 'ProductoId = :pid:',
+            'bind' => [ 'pid' => $datos->Id ]
+          ]);
+          if ($pivas->count() > 0) {
+            // Si hay registro de iva en db
+            if ($datos->relImposiciones && count($datos->relImposiciones) <= 0) { // Eliminar
+              $prdimp = reset($pivas);
+              $piv = ProductosImposiciones::findFirstById($prdimp->Id);
+              if ($piv != undefined) {
+                $piv->delete();
+              }
+            }
+          } else {
+            // no hay resgistro de iva db
+            if ($datos->relImposiciones && count($datos->relImposiciones) > 0) {
+              $prdimp = reset($datos>relImposiciones);
+              $piv = new ProductosImposiciones();
+              $piv->ProductoId = $datos->Id;
+              $piv->ImpuestoId = $prdimp->ImpuestoId;
+              $piv->create();
+            }
+          }
           $ret->res = true;
           $ret->cid = $datos->Id;
           $ret->msj = "Se actualizo correctamente los datos del Producto";
@@ -149,18 +217,32 @@ class InventariosController extends ControllerBase  {
         }
       } else {
         // Crear producto nuevo
-        $cod = Productos::maximum([
-          'column' => 'codigo'
-        ]) ?? 0;
-        $num = intval($cod);
-        /*$num += 1;
-        $cod = str_pad($num, 8, "0", STR_PAD_LEFT);*/
-        if ($num = 0)
+        // Buscar codigo numerico
+        $di = Di::getDefault();
+        $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Productos 
+            WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+        $qry = new Query($phql, $di);
+        $rws = $qry->execute();
+        if ($rws->count() === 1) {
+          $rmax = $rws->getFirst();
+          try {
+            $num = intval($rmax['maxcod']);
+          } catch (Exception $e) {
+            //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
+            $num = 0;
+          }
+        }
+        
+        if ($num == 0)
           $num = 1000;
         else
-          $num += 1;  
+          $num += 1;
+        if (strlen($datos->Codigo) > 0) {
+          $num = $datos->Codigo;
+        }
+
         $prd = new Productos();
-        $prd->Codigo = $num;
+        $prd->Codigo = strval($num);
         $prd->Nombre = $datos->Nombre;
         $prd->Barcode = $datos->Barcode;
         $prd->Grupo = $datos->Grupo;
@@ -181,9 +263,27 @@ class InventariosController extends ControllerBase  {
         $prd->PrecioOrigen = $datos->PrecioOrigen;
         $prd->Estado = 0;
         if ($prd->create()) {
-          // Crear lineas de productos nuevas
+          // Crear lineas de precios nuevas e imposiciones
           $ret->res = true;
-          $ret->cid = $prd->Id;
+          $ret->cid = $prd->Id;          
+          $ret->msj = "Se registrara las imposiciones";
+          // Crear imposiciones
+          foreach ($datos->relImposiciones as $mi) {
+            $ins = new ProductosImposiciones();
+            $ins->ProductoId = $prd->Id;
+            $ins->ImpuestoId = $mi->ImpuestoId;
+            $ins->create();
+          }
+          $ret->msj = "Se registrara los precios";
+          // Crear precios
+          foreach ($datos->relPrecios as $pi) {
+            $insp = new ProductosPrecios();
+            $insp->ProductoId = $prd->Id;
+            $insp->Precio = $pi->Precio;
+            $insp->MinimoCondicion = $pi->MinimoCondicion;
+            $insp->VolumenCondicion = $pi->VolumenCondicion;
+            $insp->create();
+          }
           $ret->msj = "Se registro correctamente el nuevo producto";
           $this->response->setStatusCode(201, 'Created');  
         } else {
@@ -344,13 +444,14 @@ class InventariosController extends ControllerBase  {
   public function movimientosBuscarAction() {
     $this->view->disable();
     $bod = $this->dispatcher->getParam('bodega');
-    $tipoBusca = $this->dispatcher->getParam('tipo');
+    $tipoBusca = $this->dispatcher->getParam('tipobusca');
+    $tipoMov = $this->dispatcher->getParam('tipo');
     $filtro = $this->dispatcher->getParam('filtro');
     $estado = $this->dispatcher->getParam('estado');
     $clase = $this->dispatcher->getParam('clase');
     $desde = $this->dispatcher->getParam('desde');
     $hasta = $this->dispatcher->getParam('hasta');
-    $condicion = "";
+    $condicion = "Tipo = " . $tipoMov . " AND ";
     $res = [];
     if ($clase < 3) {
       $condicion = "Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
@@ -419,10 +520,11 @@ class InventariosController extends ControllerBase  {
         $mov->SucursalId = $datos->SucursalId;
         $mov->Descripcion = $datos->Descripcion;
         $mov->Concepto = $datos->Concepto;
-        $mov->Subtotal = $datos->Subtotal;
-        $mov->Subtotalex = $datos->Subtotalex;
-        $mov->Descuento = $datos->Descuento;
-        $mov->Impuestos = $datos->Impuestos;
+        
+        //$mov->Subtotal = $datos->Subtotal;
+        //$mov->Subtotalex = $datos->Subtotalex;
+        //$mov->Descuento = $datos->Descuento;
+        //$mov->Impuestos = $datos->Impuestos;
         $mov->Estado = $datos->Estado;
         if($mov->update()) {
           $ret->res = true;
@@ -468,10 +570,10 @@ class InventariosController extends ControllerBase  {
         $mov->SucursalId = $datos->SucursalId;
         $mov->Descripcion = $datos->Descripcion;
         $mov->Concepto = $datos->Concepto;
-        $mov->Subtotal = $datos->Subtotal;
+        /*$mov->Subtotal = $datos->Subtotal;
         $mov->Subtotalex = $datos->Subtotalex;
         $mov->Descuento = $datos->Descuento;
-        $mov->Impuestos = $datos->Impuestos;
+        $mov->Impuestos = $datos->Impuestos;*/
         $mov->Estado = 0;
         if ($mov->create()) {
           $ret->res = true;
@@ -517,7 +619,7 @@ class InventariosController extends ControllerBase  {
   }
 
   private function afectarMovimientoInventario($item, $bod, $origen, $signo) {
-    $res = Kardex::find([
+    /*$res = Kardex::find([
       'conditions' => 'ProductoId = :pro: AND BodegaId = :bod:',
       'bind' => [ 'bod' => $bod, 'pro' => $item->ProductoId ]
     ]);
@@ -549,7 +651,7 @@ class InventariosController extends ControllerBase  {
       $kdx = $res[0];
       $kdx->Ingresos = $kdx->Ingresos + $ing;
       $kdx->Egresos = $kdx->Egresos + $egr;
-      $kdx->actualizacion = date('Y-m-d H:i:s');
+      $kdx->Actualizacion = date('Y-m-d H:i:s');
       if ($kdx->update()) {
         $msj = "Se actualizo";
       } else {
@@ -564,8 +666,6 @@ class InventariosController extends ControllerBase  {
       $kdxn->BodegaId = $bod;
       $kdxn->Ingresos = $ing;
       $kdxn->Egresos = $egr;
-      $kdxn->PresentacionId = '';
-      $kdxn->LoteId = 0;
       $kdxn->Actualizacion = date('Y-m-d H:i:s');
       if ($kdxn->create()) {
         $msj = "Todo bien";
@@ -575,8 +675,8 @@ class InventariosController extends ControllerBase  {
           $msj .= $m . "\n";
         }
       }
-    }
-    return $msj;
+    }*/
+    return true; //$msj;
   }
 
   private function ultimoNumeroMovimiento($tipo) {

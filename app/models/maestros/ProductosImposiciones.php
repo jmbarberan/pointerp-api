@@ -4,6 +4,7 @@ namespace Pointerp\Modelos\Maestros;
 
 use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
+use Pointerp\Modelos\Maestros\Impuestos;
 
 class ProductosImposiciones extends Modelo {
   public function initialize() {

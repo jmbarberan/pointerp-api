@@ -13,8 +13,31 @@ class MaestrosController extends ControllerBase  {
   public function clientesPorCedulaAction() {
     $ced = $this->dispatcher->getParam('ced');
     $rows = Clientes::find([
-      'conditions' => 'Identificacion = :ced: AND Estado = 0',
+      'conditions' => 'Identificacion = :ced:',
       'bind' => [ 'ced' => $ced ]
+    ]);
+    if ($rows->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function clientesPorCedulaEstadoAction() {
+    $ced = $this->dispatcher->getParam('ced');
+    $est = $this->dispatcher->getParam('est');
+    $cond = 'Identificacion = :ced:';
+    $params = [ 'ced' => $ced ];
+    if ($est < 9) {
+      $cond .= ' AND Estado = :est:';
+      $params = [ 'ced' => $ced, 'est' => $est ];
+    }
+    $rows = Clientes::find([
+      'conditions' => $cond,
+      'bind' => $params
     ]);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');

@@ -128,8 +128,8 @@ class VentasController extends ControllerBase  {
             $ins->Descuento = $mi->Descuento;
             $ins->Adicional = $mi->Adicional;
             $ins->Despachado = $mi->Despachado;
-            $ins->LoteId = $mi->LoteId;
-            $ins->PresentacionId = $mi->PresentacionId;
+            //$ins->LoteId = $mi->LoteId;
+            //$ins->PresentacionId = $mi->PresentacionId;
             $ins->Costo = $mi->Costo;
             $ins->create();
             // Afectar el inventario
@@ -201,8 +201,8 @@ class VentasController extends ControllerBase  {
             $ins->Descuento = $mi->Descuento;
             $ins->Adicional = $mi->Adicional;
             $ins->Despachado = $mi->Despachado;
-            $ins->LoteId = $mi->LoteId;
-            $ins->PresentacionId = $mi->PresentacionId;
+            //$ins->LoteId = $mi->LoteId;
+            //$ins->PresentacionId = $mi->PresentacionId;
             $ins->Costo = $mi->Costo;
             if (!$ins->create()) {
               foreach ($ins->getMessages() as $m) {
@@ -263,9 +263,9 @@ class VentasController extends ControllerBase  {
     $msj = "No se proceso";
     if ($res->count() > 0) {
       $kdx = $res[0];
-      $kdx->ingresos = $kdx->ingresos + $ing;
-      $kdx->egresos = $kdx->egresos + $egr;
-      $kdx->actualizacion = date('Y-m-d H:i:s');
+      $kdx->Ingresos = $kdx->Ingresos + $ing;
+      $kdx->Egresos = $kdx->Egresos + $egr;
+      $kdx->Actualizacion = date('Y-m-d H:i:s');
       if ($kdx->update()) {
         $msj = "Kardex actualizado";
       } else {
@@ -276,13 +276,11 @@ class VentasController extends ControllerBase  {
       }
     } else {
       $kdxn = new Kardex();
-      $kdxn->producto_id = $item->producto_id;
-      $kdxn->bodega_id = $bod;
-      $kdxn->ingresos = $ing;
-      $kdxn->egresos = $egr;
-      $kdxn->presentacion_id = '';
-      $kdxn->lote_id = 0;
-      $kdxn->actualizacion = date('Y-m-d H:i:s');
+      $kdxn->ProductoId = $item->ProductoId;
+      $kdxn->BodegaId = $bod;
+      $kdxn->Ingresos = $ing;
+      $kdxn->Egresos = $egr;
+      $kdxn->Actualizacion = date('Y-m-d H:i:s');
       if ($kdxn->create()) {
         $msj = "Kardex registrado";
       } else {
@@ -327,6 +325,24 @@ class VentasController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function ventaPorNumeroAction() {
+    $tipo = $this->dispatcher->getParam('tipo');
+    $num = $this->dispatcher->getParam('numero');
+    $rows = Ventas::find([
+      'conditions' => 'Tipo = :tip: AND Numero = :num:',
+      'bind' => [ 'tip' => $tipo, 'num' => $num ]
+    ]);
+    if ($rows->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $rows = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rows));
     $this->response->send();
   }
 

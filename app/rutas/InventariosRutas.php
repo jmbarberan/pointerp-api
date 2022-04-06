@@ -18,6 +18,10 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'productosBuscar',
     ]);
+    $this->addGet('/productos/emp/{empresa}/estado/{estado}/listar', [
+      'controller' => $controlador,
+      'action'     => 'productosEmpresaEstado',
+    ]);
     $this->addGet('/productos/{id}/bodega/{bodega}/existencia', [
       'controller' => $controlador,
       'action'     => 'exitenciasProducto',
@@ -53,7 +57,7 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'movimientoPorId',
     ]);
-    $this->addGet('/movimientos/bodega/{bodega}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipo/{tipo}/filtro/{filtro}/buscar', [
+    $this->addGet('/movimientos/bodega/{bodega}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipobusca/{tipobusca}/tipo/{tipo}/filtro/{filtro}/buscar', [
       'controller' => $controlador,
       'action'     => 'movimientosBuscar',
     ]);

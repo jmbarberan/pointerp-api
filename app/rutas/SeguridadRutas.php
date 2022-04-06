@@ -14,11 +14,14 @@ class SeguridadRutas extends \Phalcon\Mvc\Router\Group
             'controller' => $controlador,
             'action'     => 'usuariosTodos',
         ]);
-
         $this->addGet('/usuarios/{id}', [
             'controller' => $controlador,
             'action'     => 'usuarioPorId',
         ]);
+        $this->addPut('/usuarios/{id}/modificar/estado/{estado}', [
+            'controller' => $controlador,
+            'action'     => 'usuarioModificarEstado',
+          ]);
 
         $this->addGet('/roles', [
             'controller' => $controlador,

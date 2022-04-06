@@ -1,4 +1,7 @@
 AddDefaultCharset UTF-8
+SetEnv DB_USER poinspve_iceq
+SetEnv DB_PASS Caricatur@55
+SetEnv DB_NAME poinspve_prueba
 
 <IfModule mod_rewrite.c>
     RewriteEngine On

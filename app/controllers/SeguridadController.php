@@ -9,7 +9,7 @@ use Pointerp\Modelos\Claves;
 use Pointerp\Modelos\Usuarios;
 use Pointerp\Modelos\Autorizaciones;
 use Pointerp\Modelos\Privilegios;
-//use Pointerp\Modelos\Roles;
+use Pointerp\Modelos\Roles;
 
 class SeguridadController extends ControllerBase
 {
@@ -52,6 +52,29 @@ class SeguridadController extends ControllerBase
         $this->response->send();
     }
 
+    public function usuarioModificarEstado() {
+        $id = $this->dispatcher->getParam('id');
+        $est = $this->dispatcher->getParam('estado');
+        $usr = Usuarios::findFirstById($id);
+        $res = 'No se ha podido eliminar el usuario';
+        $this->response->setStatusCode(404, 'Not found');
+        if ($usr != null) {
+            $usr->Estado = $est;
+            $res = $usr->save();
+            if ($res != false) {
+                $res = 'El usuario se elimino exitosamente';
+                $this->response->setStatusCode(200, 'Ok');
+            } else {
+                $res = 'El usuario no se pudo eliminar';
+            }
+        } else {
+            $res = 'El usuario no existe';
+        }
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setContent(json_encode($res));
+        $this->response->send();
+    }
+
     public function cambiarClaveAction() {
         $cred = $this->request->getJsonRawBody();
         $id = $cred->Id;
@@ -78,7 +101,7 @@ class SeguridadController extends ControllerBase
 
     public function usuarioGuardarAction() {
         $datos = $this->request->getJsonRawBody();
-        $res = 'No se ha podido actualizar la contraseña';
+        $res = 'No se ha podido guardar los cambios';
         $this->response->setStatusCode(404, 'Not found');
         $usr = false;
         if ($datos->Id > 0) {
@@ -142,17 +165,17 @@ class SeguridadController extends ControllerBase
     }
 
     public function rolesTodosAction() {
-        /*$this->view->disable();
+        $this->view->disable();
         $res = Roles::find();
 
-        if ($res->count() > 0) {*/
+        if ($res->count() > 0) {
             $this->response->setStatusCode(200, 'Ok');
-        /*} else {
+        } else {
             $this->response->setStatusCode(404, 'Not found');
-        }*/
+        }
 
         $this->response->setContentType('application/json', 'UTF-8');
-        $this->response->setContent(json_encode("Respuesta"));
+        $this->response->setContent(json_encode($res));
         $this->response->send();
     }
 
@@ -515,7 +538,7 @@ class SeguridadController extends ControllerBase
         $txt = $this->dispatcher->getParam('texto');
         $this->response->setStatusCode(200, 'Ok');
         $this->response->setContentType('application/json', 'UTF-8');
-        $this->response->setContent(json_encode('Hola el texto es ' . $txt));
+        $this->response->setContent(json_encode('Hola, el texto es ' .md5($txt)));
         $this->response->send();
     }
 }

@@ -17,9 +17,9 @@ $router->mount(new InventariosRutas());
 $router->mount(new MaestrosRutas());
 $router->mount(new VentasRutas());
 
-$router->addGet('prueba/{texto}', [
+/*$router->addGet('prueba/{texto}', [
   'controller' => 'seguridad',
   'action'     => 'prueba',
-]);
+]);*/
 
 $router->handle($_SERVER['REQUEST_URI']);

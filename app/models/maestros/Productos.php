@@ -44,9 +44,9 @@ class Productos extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    $res = $this->toArray();
+    $res = $this->toUnicodeArray();
     if ($this->relCategoria != null) {   
-      $res['relCategoria'] = $this->relCategoria->toArray();
+      $res['relCategoria'] = $this->relCategoria->toUnicodeArray();
     }
     if ($this->relTipo != null) {   
       $res['relTipo'] = $this->relTipo->toArray();
@@ -59,7 +59,7 @@ class Productos extends Modelo {
       foreach ($this->relImposiciones as $it) {
         if ($it->relImpuesto != null) {
           $ins = $it->toArray();
-          $ins['relImpuesto'] = $it->relImpuesto->toArray();
+          $ins['relImpuesto'] = $it->relImpuesto->toUnicodeArray();
           array_push($items, $ins);
         }
       }

@@ -10,4 +10,7 @@ class Registros extends Modelo {
     $this->setSource('registros');
   }
 
+  public function jsonSerialize () : array {
+    return $this->toUnicodeArray();
+  }
 }

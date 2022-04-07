@@ -9,4 +9,8 @@ class Impuestos extends Modelo {
   public function initialize() {
     $this->setSource('impuestos');
   }
+
+  public function jsonSerialize () : array {
+    return $this->toUnicodeArray();
+  }
 }

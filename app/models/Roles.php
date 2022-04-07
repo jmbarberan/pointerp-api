@@ -9,5 +9,9 @@ class Roles extends Modelo
     public function initialize()
     {
         $this->setSource('roles');
-    }   
+    }  
+    
+    public function jsonSerialize () : array {
+        return $this->ToUnicodeArray();
+    }
 }

@@ -33,7 +33,7 @@ class SeguridadController extends ControllerBase
             $this->response->setStatusCode(404, 'Not found');
         }
         $this->response->setContentType('application/json', 'UTF-8');
-        $this->response->setContent(json_encode($res));
+        $this->response->setJsonContent(mb_convert_encoding($res[1]->Nombres, 'UTF-8', 'UTF-8'));
         $this->response->send();
     }
 
@@ -541,4 +541,6 @@ class SeguridadController extends ControllerBase
         $this->response->setContent(json_encode('Hola, el texto es ' .md5($txt)));
         $this->response->send();
     }
+
+
 }

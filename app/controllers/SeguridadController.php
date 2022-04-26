@@ -538,7 +538,7 @@ class SeguridadController extends ControllerBase
         $txt = $this->dispatcher->getParam('texto');
         $this->response->setStatusCode(200, 'Ok');
         $this->response->setContentType('application/json', 'UTF-8');
-        $this->response->setContent(json_encode('Hola, el texto es ' .md5($txt)));
+        $this->response->setContent(json_encode('Hola, el texto es ' . md5($txt)));
         $this->response->send();
     }
 

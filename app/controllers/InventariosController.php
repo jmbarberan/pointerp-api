@@ -122,6 +122,7 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
+
   public function productoGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
@@ -130,6 +131,10 @@ class InventariosController extends ControllerBase  {
         'cid' => $datos->Id,
         'msj' => 'Los datos no se pudieron procesar'
       ];
+      $nom = $txt->Nombre;
+      if (substr($nom, 0, 4 ) === "@1_7") {
+        $nom = str_replace('@1_7', 'UNIO', $nom);
+      }
       if ($datos->Id > 0) {
         // Traer medico por id para actualizar
         $prd = Productos::findFirstById($datos->Id);
@@ -218,32 +223,34 @@ class InventariosController extends ControllerBase  {
       } else {
         // Crear producto nuevo
         // Buscar codigo numerico
-        $di = Di::getDefault();
-        $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Productos 
-            WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
-        $qry = new Query($phql, $di);
-        $rws = $qry->execute();
-        if ($rws->count() === 1) {
-          $rmax = $rws->getFirst();
-          try {
-            $num = intval($rmax['maxcod']);
-          } catch (Exception $e) {
-            //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
-            $num = 0;
+        $newcod = $datos->Codigo;
+        if (strlen($datos->Codigo) <= 0) {
+          $di = Di::getDefault();
+          $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Productos 
+              WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+          $qry = new Query($phql, $di);
+          $rws = $qry->execute();
+          if ($rws->count() === 1) {
+            $rmax = $rws->getFirst();
+            try {
+              $num = intval($rmax['maxcod']);
+            } catch (Exception $e) {
+              //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
+              $num = 0;
+            }
           }
-        }
-        
-        if ($num == 0)
-          $num = 1000;
-        else
-          $num += 1;
-        if (strlen($datos->Codigo) > 0) {
-          $num = $datos->Codigo;
+          
+          if ($num == 0)
+            $num = 1000;
+          else
+            $num += 1;
+
+          $newcod = strval($num);
         }
 
         $prd = new Productos();
-        $prd->Codigo = strval($num);
-        $prd->Nombre = $datos->Nombre;
+        $prd->Codigo = $newcod; //strval($num);
+        $prd->Nombre = utf8_decode($datos->Nombre);
         $prd->Barcode = $datos->Barcode;
         $prd->Grupo = $datos->Grupo;
         $prd->Descripcion = $datos->Descripcion;
@@ -277,12 +284,15 @@ class InventariosController extends ControllerBase  {
           $ret->msj = "Se registrara los precios";
           // Crear precios
           foreach ($datos->relPrecios as $pi) {
-            $insp = new ProductosPrecios();
-            $insp->ProductoId = $prd->Id;
-            $insp->Precio = $pi->Precio;
-            $insp->MinimoCondicion = $pi->MinimoCondicion;
-            $insp->VolumenCondicion = $pi->VolumenCondicion;
-            $insp->create();
+            if ($pi->Precio > 0) {
+              $insp = new ProductosPrecios();
+              $insp->ProductoId = $prd->Id;
+              $insp->Precio = $pi->Precio;
+              $insp->MinimoCondicion = $pi->MinimoCondicion;
+              $insp->VolumenCondicion = $pi->VolumenCondicion;
+              $insp->create();
+            }
+            
           }
           $ret->msj = "Se registro correctamente el nuevo producto";
           $this->response->setStatusCode(201, 'Created');  
@@ -307,6 +317,7 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($ret));
     $this->response->send();
   }
+  
   public function productoModificarEstadoAction() {
     $id = $this->dispatcher->getParam('id');
     $est = $this->dispatcher->getParam('estado');

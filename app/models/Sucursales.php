@@ -10,5 +10,9 @@ class Sucursales extends Modelo
     public function initialize()
     {
         $this->setSource('sucursales');
-    }   
+    } 
+    
+    public function jsonSerialize () : array {
+        return $this->ToUnicodeArray();
+    }
 }

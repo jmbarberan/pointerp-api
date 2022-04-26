@@ -12,10 +12,12 @@ class Modelo extends Model
     }
 
     public function ToUnicodeArray() {
-        array_walk_recursive($this->toArray(), function(&$item) {
+        $res = $this->toArray();
+        array_walk_recursive($res, function(&$item) {
             if (is_string($item)) {
                 $item = utf8_encode($item);
             }
         });
+        return $res;
     }
 }

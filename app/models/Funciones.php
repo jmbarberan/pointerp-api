@@ -24,12 +24,12 @@ class Funciones extends Modelo {
     }
 
     public function jsonSerialize () : array {
-        $res = $this->toArray();
+        $res = $this->toUnicodeArray();
         if ($this->relComandos != null) {
             $res['relComandos'] = $this->relComandos->toArray();
         }
         if ($this->relModulo != null) {
-            $res['relModulo'] = $this->relModulo->toArray();
+            $res['relModulo'] = $this->relModulo->toUnicodeArray();
         }
         return $res;
     }

@@ -18,9 +18,9 @@ class Clientes extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    $res = $this->toArray();
+    $res = $this->toUnicodeArray();
     if ($this->relIdentificaTipo != null) {   
-      $res['relIdentificaTipo'] = $this->relIdentificaTipo->toArray();
+      $res['relIdentificaTipo'] = $this->relIdentificaTipo->toUnicodeArray();
     }
     return $res;
   }

@@ -42,7 +42,7 @@ class Ventas extends Modelo
       $res['relBodega'] = $this->relBodega->toArray();
     }
     if ($this->relCliente != null) {   
-      $res['relCliente'] = $this->relCliente->toArray();
+      $res['relCliente'] = $this->relCliente->toUnicodeArray();
     }
     if ($this->relItems != null) {   
       $items = [];

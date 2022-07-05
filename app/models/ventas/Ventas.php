@@ -34,7 +34,7 @@ class Ventas extends Modelo
   }
   
   public function jsonSerialize () : array {
-    $res = $this->toArray();
+    $res = $this->toUnicodeArray();
     if ($this->relSucursal != null) {   
       $res['relSucursal'] = $this->relSucursal->toArray();
     }
@@ -49,7 +49,7 @@ class Ventas extends Modelo
       foreach ($this->relItems as $it) {
         if ($it->relProducto != null) {
           $ins = $it->toArray();
-          $ins['relProducto'] = $it->relProducto->toArray();
+          $ins['relProducto'] = $it->relProducto->toUnicodeArray();
           array_push($items, $ins);
         }
       }

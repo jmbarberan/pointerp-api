@@ -17,7 +17,7 @@ class Usuarios extends Modelo
     }
 
     public function jsonSerialize () : array {
-        $dat = $this->ToUnicodeArray();        
+        $res = $this->ToUnicodeArray();        
         if ($this->relRol != null) {
           $res['relRol'] = $this->relRol->ToUnicodeArray();
         }

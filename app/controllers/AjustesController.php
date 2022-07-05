@@ -6,6 +6,7 @@ use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Sucursales;
+use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Reportes;
 
 class AjustesController extends ControllerBase  {
@@ -52,6 +53,24 @@ class AjustesController extends ControllerBase  {
     $res = Sucursales::find([
         'conditions' => 'EmpresaId = :id:',
         'bind' => ['id' => $emp]
+    ]);
+
+    if ($res->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function empresaPorEstadoAction() {
+    $this->view->disable();
+    $est = $this->dispatcher->getParam('est');
+    $res = Empresas::find([
+        'conditions' => 'Estado = :est:',
+        'bind' => ['est' => $est]
     ]);
 
     if ($res->count() > 0) {

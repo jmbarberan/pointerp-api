@@ -97,7 +97,7 @@ class SeguridadRutas extends \Phalcon\Mvc\Router\Group
             'controller' => $controlador,
             'action'     => 'funcionComandos',
         ]);
-        $this->addGet('/prueba/{texto}', [
+        $this->addGet('/md5/{texto}', [
             'controller' => $controlador,
             'action'     => 'prueba',
         ]);

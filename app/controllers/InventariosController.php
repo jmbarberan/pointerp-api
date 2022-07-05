@@ -11,6 +11,7 @@ use Pointerp\Modelos\Inventarios\Bodegas;
 use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Inventarios\Movimientos;
 use Pointerp\Modelos\Inventarios\MovimientosItems;
+use Pointerp\Modelos\Inventarios\Existencias;
 use Pointerp\Modelos\Maestros\Registros;
 
 class InventariosController extends ControllerBase  {
@@ -52,22 +53,18 @@ class InventariosController extends ControllerBase  {
       }
     }
 
-    $campo = 'upper(Nombre) like';
-    switch($atrib) {
-      case 1: {
-        $campo = 'Codigo =';
-        break;
-      };
+    $campo = "Nombre like '" . $filtro . "'";
+    if($atrib == 1) {
+      $campo = "Codigo = '" . $filtro . "'";
     };
 
-    $condicion = 'EmpresaId = :emp: AND ' . $campo . ' :fil:';
+    $condicion = "EmpresaId = " . $empresa . " AND " . $campo;
     if ($estado == 0) {
         $condicion .= ' AND Estado = 0';
     }
     
     $res = Productos::find([
       'conditions' => $condicion,
-      'bind' => [ 'emp' => $empresa, 'fil' => $filtro ],
       'order' => 'Nombre'
     ]);
 
@@ -125,13 +122,14 @@ class InventariosController extends ControllerBase  {
 
   public function productoGuardarAction() {
     try {
+      
       $datos = $this->request->getJsonRawBody();
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
         'msj' => 'Los datos no se pudieron procesar'
       ];
-      $nom = $txt->Nombre;
+      $nom = $datos->Nombre;
       if (substr($nom, 0, 4 ) === "@1_7") {
         $nom = str_replace('@1_7', 'UNIO', $nom);
       }
@@ -348,12 +346,13 @@ class InventariosController extends ControllerBase  {
   public function bodegasPorEstadoAction() {
     $this->view->disable();
     $est = $this->dispatcher->getParam('estado');
+    $emp = $this->dispatcher->getParam('empresa');
     $ops = [];
     if ($est == 0) { 
-      $ops += [ 'conditions' => 'Estado = :est:' ];
-      $ops += [ 'bind' => ['est' => $est] ];
+      $ops += [ 'conditions' => 'Estado = :est: AND EmpresaId = :emp:' ];
+      $ops += [ 'bind' => ['est' => $est, 'emp' => $emp] ];
     }
-    $ops += [ 'order' => 'Nombre' ];
+    //$ops += [ 'order' => 'Nombre' ];
     $res = Bodegas::find($ops);
     if ($res->count() > 0) {
         $this->response->setStatusCode(200, 'Ok');
@@ -366,14 +365,69 @@ class InventariosController extends ControllerBase  {
   }
   
   // TODO Traer la existencia desde la vista ExistenciaDatos
-  public function exitenciasProductoAction() {
+  public function exitenciasProductoAction() {    
+    $di = Di::getDefault();
     $id = $this->dispatcher->getParam('id');
     $bod = $this->dispatcher->getParam('bodega');
-    $res = Kardex::find([
-      'conditions' => 'ProductoId = :pro: AND BodegaId = :bod:',
-      'bind' => [ 'pro' => $id, 'bod' => $bod ]
-    ]);
-    if ($res->count() > 0) {
+    $condicion = 'e.ProductoId = ' . $id . ' ';
+    if ($bod > 0) {
+      $condicion .= 'AND e.BodegaId = ' . $bod . ' ';
+    }
+    
+    $phql = 'Select e.ProductoId, e.BodegaId, b.Denominacion, SUM(e.Saldo) as Saldo 
+      from Pointerp\Modelos\Inventarios\Existencias e 
+      left join Pointerp\Modelos\Maestros\Productos p on e.ProductoId = p.Id
+      left join Pointerp\Modelos\Inventarios\Bodegas b on e.BodegaId = b.Id
+      Where ' . $condicion .
+      'group by ProductoId, BodegaId, Denominacion';    
+      
+    $qry = new Query($phql, $di);
+    $rws = $qry->execute();
+    
+    //$rex = array_merge($res);
+    if (count($rws) > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rws));
+    $this->response->send();
+  }
+
+  public function exitenciasTodosAction() {
+    $di = Di::getDefault();
+    $bod = $this->dispatcher->getParam('bodega');
+    $zeros = $this->dispatcher->getParam('zeros');
+    $condicion = 'e.BodegaId = ' . $bod . ' ';
+    
+    $phql = 'Select e.BodegaId, e.ProductoId, p.Nombre, p.Codigo, p.Medida, SUM(e.Saldo) as Saldo 
+      from Pointerp\Modelos\Inventarios\Existencias e 
+      left join Pointerp\Modelos\Maestros\Productos p on e.ProductoId = p.Id
+      Where ' . $condicion .
+      'group by BodegaId, ProductoId, Nombre, Codigo, Medida';
+    if ($zeros == 0) {
+        $phql .= ' HAVING Saldo != 0';
+    }
+      
+    $qry = new Query($phql, $di);
+    $rws = $qry->execute();
+    $res = [];
+
+    foreach ($rws as $exis) {
+      $eay = (array) $exis;
+      array_walk_recursive($eay, function(&$item) {
+        try {
+          if (is_string($item)) {
+            $item = utf8_encode($item);
+          }
+        } catch (Exception $e) { }
+      });
+      array_push($res, $eay);
+    }
+
+    //$rex = array_merge($res);
+    if (count($rws) > 0) {
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $this->response->setStatusCode(404, 'Not found');
@@ -383,60 +437,13 @@ class InventariosController extends ControllerBase  {
     $this->response->send();
   }
 
-  public function exitenciasTodosAction() {
-    $di = Di::getDefault();
-    $bod = $this->dispatcher->getParam('bodega');
-    $zeros = $this->dispatcher->getParam('zeros');
-    $ret = [];
-    $res = Kardex::find([
-      'conditions' => 'bodega_id = :bod:',
-      'bind' => [ 'bod' => $bod ]
-    ]);
-    if ($zeros > 0) {
-      foreach ($res as $kdx) {
-        array_push($ret, $kdx);
-      }
-      $qry = new Query('SELECT p.* 
-        FROM Pointerp\Modelos\Maestros\Productos p 
-        Where id not in (
-          Select ProductoId from Pointerp\Modelos\Inventarios\Kardex
-        )', $di 
-      );
-      $prs = $qry->execute();
-      if ($prs->count() > 0) {
-        foreach ($prs as $prd) {
-          $k = new Kardex();
-          $k->Id = $prd->Id;
-          $k->relProducto = $prd;
-          $k->bodegaId = $bod;
-          $k->Ingresos = 0;
-          $k->Egresos = 0;
-          $k->Saldo = 0;
-          $k->Actualizacion = date('Y-m-d H:i:s');
-          array_push($ret, $k);
-        }
-      }
-    } else {
-      $ret = $res;
-    }
-    //$rex = array_merge($res);
-    if (count($ret) > 0) {
-        $this->response->setStatusCode(200, 'Ok');
-    } else {
-        $this->response->setStatusCode(404, 'Not found');
-    }
-    $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($ret));
-    $this->response->send();
-  }
-
   public function productosEnCeroAction() {
     $di = Di::getDefault();
     $bod = $this->dispatcher->getParam('bodega');
     $qry = new Query('SELECT p.* 
       FROM Pointerp\Modelos\Maestros\Productos p 
       Where id not in (
-        Select producto_id from Pointerp\Modelos\Inventarios\Kardex
+        Select ProductoId from Pointerp\Modelos\Inventarios\Kardex
       )', $di 
     );
     $res  =  $qry->execute();
@@ -464,9 +471,10 @@ class InventariosController extends ControllerBase  {
     $hasta = $this->dispatcher->getParam('hasta');
     $condicion = "Tipo = " . $tipoMov . " AND ";
     $res = [];
-    if ($clase < 3) {
-      $condicion = "Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
-      if (strlen($filtro) > 1) {
+    if ($clase < 2) {
+      $condicion .= "Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";      
+    } else {
+      if (strlen($filtro) > 0) {
         if ($clase == 2) {
           $filtro = str_replace('%20', ' ', $filtro);
           if ($tipoBusca == 0) {
@@ -477,11 +485,11 @@ class InventariosController extends ControllerBase  {
             $filtroSP = str_replace('  ', ' ',trim($filtro));
             $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
           }
+          $condicion .= " Descripcion like '" . $filtro . "'";
+        } else {
+          $condicion .= 'Numero = ' . $filtro;
         }
-        $condicion .= " AND Descripcion like '" . $filtro . "'";
       }
-    } else {
-      $condicion .= 'Numero = ' . $filtro;
     }
     if (strlen($condicion) > 0) {
       $condicion .= ' AND ';
@@ -511,15 +519,17 @@ class InventariosController extends ControllerBase  {
         'msj' => 'Los datos no se pudieron procesar'
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
-      $signo = $this->signoPorTipo($datos->Tipo);
+      //$signo = $this->signoPorTipo($datos->Tipo);
+      $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
+      $datos->Fecha = str_replace('Z', '', $datos->Fecha);
       if ($datos->Id > 0) {
         // Traer movimiento por id y acualizar
         $mov = Movimientos::findFirstById($datos->Id);
-        // Traer los items anteriores, reversar el inventario y eliminar estos items 
+        // Traer los items anteriores, /*reversar el inventario*/ y eliminar estos items 
         foreach ($mov->relItems as $mie) {
-          if ($signo != 0 && !is_null($mie->relProducto->relTipo) && $mie->relProducto->relTipo->contenedor > 0) { // Signo 0 no afecta el inventario
+          /*if ($signo != 0 && !is_null($mie->relProducto->relTipo) && $mie->relProducto->relTipo->contenedor > 0) { // Signo 0 no afecta el inventario
             $this->afectarMovimientoInventario($mie, $mov->BodegaId, -1, $signo);
-          }
+          }*/
           $eli = MovimientosItems::findFirstById($mie->Id);
           if ($eli != false) {
             $eli->delete();
@@ -531,31 +541,21 @@ class InventariosController extends ControllerBase  {
         $mov->SucursalId = $datos->SucursalId;
         $mov->Descripcion = $datos->Descripcion;
         $mov->Concepto = $datos->Concepto;
-        
-        //$mov->Subtotal = $datos->Subtotal;
-        //$mov->Subtotalex = $datos->Subtotalex;
-        //$mov->Descuento = $datos->Descuento;
-        //$mov->Impuestos = $datos->Impuestos;
         $mov->Estado = $datos->Estado;
         if($mov->update()) {
           $ret->res = true;
           $ret->cid = $datos->Id;
           // crear los items actualues
           foreach ($datos->relItems as $mi) {
-            // Afectar el inventario
+            /* Afectar el inventario YA NO
             if ($signo != 0 && !is_null($mi->relProducto->relTipo) && $mi->relProducto->relTipo->Contenedor > 0) { // Signo 0 no afecta el inventario
               $this->afectarMovimientoInventario($mi, $mov->BodegaId, 0, $signo);
-            }
+            }*/
             $ins = new MovimientosItems();
-            $ins->MovimientoId = $mov->Id;
+            $ins->KardexId = $mov->Id;
             $ins->ProductoId = $mi->ProductoId;
             $ins->Cantidad = $mi->Cantidad;
-            $ins->BodegaId = $mov->BodegaId;
-            $ins->LoteId = 0;
             $ins->Costo = $mi->Costo;
-            $ins->Descuento = $mi->Descuento;
-            $ins->Adicional = 0;
-            $ins->Observaciones = '';
             $ins->create();
           }
           $ret->msj = "Se actualizo correctamente los datos del registro";
@@ -571,7 +571,7 @@ class InventariosController extends ControllerBase  {
         }
       } else {
         // Crear movimiento nuevo
-        $num = $this->ultimoNumeroMovimiento($datos->tipo);
+        $num = $this->ultimoNumeroMovimiento($datos->Tipo, $datos->SucursalId);
         $mov = new Movimientos();
         $mov->numero = $num + 1;
         $mov->Tipo = $datos->Tipo;
@@ -581,30 +581,21 @@ class InventariosController extends ControllerBase  {
         $mov->SucursalId = $datos->SucursalId;
         $mov->Descripcion = $datos->Descripcion;
         $mov->Concepto = $datos->Concepto;
-        /*$mov->Subtotal = $datos->Subtotal;
-        $mov->Subtotalex = $datos->Subtotalex;
-        $mov->Descuento = $datos->Descuento;
-        $mov->Impuestos = $datos->Impuestos;*/
         $mov->Estado = 0;
         if ($mov->create()) {
           $ret->res = true;
           $ret->cid = $mov->Id;
           $ret->msj = "Se registro correctamente el nuevo movimiento";  
-          // Crear items y afectar el inventario
+          // Crear items /*y afectar el inventario*/
           foreach ($datos->relItems as $mi) {
-            if ($signo != 0 && !is_null($mi->relProducto->relTipo) && $mi->relProducto->relTipo->Contenedor > 0) { // Signo 0 no afecta el inventario
+            /*if ($signo != 0 && !is_null($mi->relProducto->relTipo) && $mi->relProducto->relTipo->Contenedor > 0) { // Signo 0 no afecta el inventario
               $this->afectarMovimientoInventario($mi, $mov->BodegaId, 0, $signo);
-            }
+            }*/
             $ins = new MovimientosItems();
-            $ins->MovimientoId = $mov->Id;
+            $ins->KardexId = $mov->Id;
             $ins->ProductoId = $mi->ProductoId;
             $ins->Cantidad = $mi->Cantidad;
-            $ins->BodegaId = $mov->BodegaId;
-            $ins->LoteId = 0;
             $ins->Costo = $mi->Costo;
-            $ins->Descuento = $mi->Descuento;
-            $ins->Adicional = 0;
-            $ins->Observaciones = '';
             $ins->create();
           }
           $this->response->setStatusCode(201, 'Created');
@@ -690,10 +681,10 @@ class InventariosController extends ControllerBase  {
     return true; //$msj;
   }
 
-  private function ultimoNumeroMovimiento($tipo) {
+  private function ultimoNumeroMovimiento($tipo, $suc) {
     return Movimientos::maximum([
       'column' => 'Numero',
-      'conditions' => 'Tipo = ' . $tipo
+      'conditions' => 'Tipo = ' . $tipo . ' AND SucursalId = ' . $suc
     ]) ?? 0;
   }
 
@@ -705,7 +696,7 @@ class InventariosController extends ControllerBase  {
     ]);
     if ($res->count() > 0) {
       $si = $res[0];
-      return $si->valor;
+      return $si->Valor;
     } else {
       return 9;
     }

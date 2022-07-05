@@ -9,7 +9,7 @@ use Pointerp\Modelos\Subscripciones;
 
 class SubscripcionesController extends ControllerBase  {
 
-  public function credencialesValidarAction() {
+  public function conexionPorCodigoAction() {
     $cred = $this->request->getJsonRawBody();
     $di = Di::getDefault();
     $phql = 'SELECT * FROM Pointerp\Modelos\Subscripciones 
@@ -37,6 +37,6 @@ class SubscripcionesController extends ControllerBase  {
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($rus));
     $this->response->send();
-}
+  }
 
 }

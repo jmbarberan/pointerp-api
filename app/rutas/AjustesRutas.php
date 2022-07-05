@@ -22,6 +22,10 @@ class AjustesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'sucursalesPorEmpresa',
     ]);
+    $this->addGet('/empresas/estado/{est}', [
+      'controller' => $controlador,
+      'action'     => 'empresaPorEstado',
+    ]);
     $this->addGet('/plantillas/tipo/{tipo}', [
       'controller' => $controlador,
       'action'     => 'plantillasPorTipo',

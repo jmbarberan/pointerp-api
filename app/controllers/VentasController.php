@@ -6,6 +6,7 @@ use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Ventas\Ventas;
+use Pointerp\Modelos\Ventas\VentasMin;
 use Pointerp\Modelos\Ventas\VentasItems;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Medicos\Consultas;
@@ -20,32 +21,34 @@ class VentasController extends ControllerBase  {
     $estado = $this->dispatcher->getParam('estado');
     $clase = $this->dispatcher->getParam('clase');
     $desde = $this->dispatcher->getParam('desde');
-    $hasta = $this->dispatcher->getParam('hasta');
-    $condicion = "";
+    $hasta = $this->dispatcher->getParam('hasta');    
+    $condicion = "Tipo in (11, 12) AND SucursalId = " . $suc;
     $res = [];
-    if ($clase < 3) {
-      $condicion = "Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
-      if (strlen($filtro) > 1) {
-        if ($clase == 2) {
-          $filtro = str_replace('%20', ' ', $filtro);
-          if ($tipoBusca == 0) {
-            // Comenzando por
-            $filtro .= '%';
-          } else {
-            // Conteniendo
-            $filtroSP = str_replace('  ', ' ',trim($filtro));
-            $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+    if ($clase < 3) {      
+      if ($clase <= 1) {
+        $condicion .= " AND Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
+      } else {
+        if (strlen($filtro) > 1) {
+          if ($clase == 2) {
+            $filtro = str_replace('%20', ' ', $filtro);
+            if ($tipoBusca == 0) {
+              // Comenzando por
+              $filtro .= '%';
+            } else {
+              // Conteniendo
+              $filtroSP = str_replace('  ', ' ',trim($filtro));
+              $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+            }
           }
+          $condicion .= " AND `Notas` like '" . $filtro . "'";
         }
-        $condicion .= " AND Notas like '" . $filtro . "'";
       }
     } else {
-      $condicion .= 'Numero = ' . $filtro;
+      $condicion .= " AND Numero = " . $filtro;
     }
 
     if (strlen($condicion) > 0) {
-      $condicion .= ' AND ';
-      $condicion .= 'Estado = 0';
+      $condicion .= ' AND Estado = 0';
       $res = Ventas::find([
         'conditions' => $condicion,
         'order' => 'Fecha'
@@ -53,9 +56,36 @@ class VentasController extends ControllerBase  {
     }
 
     if ($res->count() > 0) {
-        $this->response->setStatusCode(200, 'Ok ' . $clase);
+        $this->response->setStatusCode(200, 'Ok');
     } else {
         $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function ventasDiarioAction() {
+    $this->view->disable();
+    $suc = $this->dispatcher->getParam('sucursal'); // Solo se consulta una sucursal    
+    $estado = $this->dispatcher->getParam('estado');    
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta');
+    $res = [];
+    $desde .= " 0:00:00";
+    $hasta .= " 23:59:59";
+    $condicion = "Tipo in (11, 12) AND SucursalId = " . $suc . " AND Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
+    if ($estado == 0) {
+      $condicion .= " AND Estado = " . $estado;
+    }
+    $res = VentasMin::find([
+      'conditions' => $condicion,
+      'order' => 'Fecha'
+    ]);
+    if ($res->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));

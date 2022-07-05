@@ -71,7 +71,7 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
     ]);
 
     // Bodegas
-    $this->addGet('/bodegas/estado/{estado}', [
+    $this->addGet('/bodegas/empresa/{empresa}/estado/{estado}', [
       'controller' => $controlador,
       'action'     => 'bodegasPorEstado',
     ]);

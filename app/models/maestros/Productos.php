@@ -44,14 +44,14 @@ class Productos extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    $res = $this->ToUnicodeArray();
-    if ($this->relCategoria != null) {   
-      $res['relCategoria'] = $this->relCategoria->ToUnicodeArray();
+    $res = $this->asUnicodeArray([ 'Codigo', 'Nombre', 'Descripcion', 'Medida' ]);
+    if ($this->relCategoria != null) {
+      $res['relCategoria'] = $this->relCategoria->asUnicodeArray([ 'Denominacion' ]);
     }
-    if ($this->relTipo != null) {   
+    if ($this->relTipo != null) {
       $res['relTipo'] = $this->relTipo->toArray();
     }
-    if ($this->relPrecios != null) {   
+    if ($this->relPrecios != null) {
       $res['relPrecios'] = $this->relPrecios->toArray();
     }
     if ($this->relImposiciones != null) {   

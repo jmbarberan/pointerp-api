@@ -75,5 +75,24 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'bodegasPorEstado',
     ]);
+
+    #region Compras
+    $this->addGet('/compras/{id}', [
+      'controller' => $controlador,
+      'action'     => 'compraPorId',
+    ]);
+    $this->addGet('/compras/sucursal/{sucursal}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipobusca/{tipobusca}/tipo/{tipo}/filtro/{filtro}/buscar', [
+      'controller' => $controlador,
+      'action'     => 'comprasBuscar',
+    ]);
+    $this->addPut('/compras/{id}/modificar/estado/{estado}', [
+      'controller' => $controlador,
+      'action'     => 'compraModificarEstado',
+    ]);
+    $this->addPost('/compras/guardar', [
+      'controller' => $controlador,
+      'action'     => 'compraGuardar',
+    ]);
+    #endregion
   }
 }

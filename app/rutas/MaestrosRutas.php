@@ -10,11 +10,6 @@ class MaestrosRutas extends \Phalcon\Mvc\Router\Group
     $this->setPaths(['namespace' => 'Pointerp\Controladores',]);
     $this->setPrefix('/api/v4/maestros');
 
-    /*$this->addGet('clientes/buscar/tipo/emp/{empresa}/{tipo}/estado/{estado}/filtro/{filtro}', [
-      'controller' => $controlador,
-      'action'     => 'clientesBuscar',
-    ]);*/
-
     $this->addGet('/clientes/cedula/{ced}', [
       'controller' => $controlador,
       'action'     => 'clientesPorCedula',
@@ -23,6 +18,16 @@ class MaestrosRutas extends \Phalcon\Mvc\Router\Group
     $this->addGet('/clientes/estado/{estado}/filtro/{filtro}/emp/{emp}/buscar', [
       'controller' => $controlador,
       'action'     => 'clientesPorNombresEstado',
+    ]);
+
+    $this->addGet('/proveedores/cedula/{ced}', [
+      'controller' => $controlador,
+      'action'     => 'proveedoresPorCedula',
+    ]);
+
+    $this->addGet('/proveedores/estado/{estado}/filtro/{filtro}/emp/{emp}/buscar', [
+      'controller' => $controlador,
+      'action'     => 'proveedoresPorNombresEstado',
     ]);
   }
 }

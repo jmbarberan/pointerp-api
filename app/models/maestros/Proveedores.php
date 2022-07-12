@@ -6,10 +6,10 @@ use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
 use Pointerp\Modelos\Maestros\Registros;
 
-class Clientes extends Modelo {
+class Proveedores extends Modelo {
 
   public function initialize() {
-    $this->setSource('clientes');
+    $this->setSource('proveedores');
 
     $this->hasOne('IdentificacionTipo', Registros::class, 'Id', [
       'reusable' => true, // cache
@@ -19,10 +19,9 @@ class Clientes extends Modelo {
 
   public function jsonSerialize () : array {
     $res = $this->asUnicodeArray([
-      'Codigo',
-      'Nombres',
+      'Nombre',
       'Direccion',
-      'Telefonos',
+      'Telefono',
       'Representante',
       'Referencias',
       'Email'

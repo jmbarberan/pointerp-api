@@ -8,6 +8,9 @@ use Pointerp\Modelos\Maestros\Productos;
 use Pointerp\Modelos\Maestros\ProductosPrecios;
 use Pointerp\Modelos\Maestros\ProductosImposiciones;
 use Pointerp\Modelos\Inventarios\Bodegas;
+use Pointerp\Modelos\Inventarios\Compras;
+use Pointerp\Modelos\Inventarios\ComprasItems;
+use Pointerp\Modelos\Inventarios\ComprasImpuestos;
 use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Inventarios\Movimientos;
 use Pointerp\Modelos\Inventarios\MovimientosItems;
@@ -16,7 +19,7 @@ use Pointerp\Modelos\Maestros\Registros;
 
 class InventariosController extends ControllerBase  {
 
-  // PRODUCTOS
+  #region PRODUCTOS
   public function productoPorIdAction() {
     $this->view->disable();
     $id = $this->dispatcher->getParam('id');
@@ -341,8 +344,9 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($msj));
     $this->response->send();
   }
+  #endregion
 
-  // KARDEX
+  #region KARDEX
   public function bodegasPorEstadoAction() {
     $this->view->disable();
     $est = $this->dispatcher->getParam('estado');
@@ -457,8 +461,9 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
+  #endregion
 
-  // MOVIMIENTOS
+  #region MOVIMIENTOS
   public function movimientosBuscarAction() {
     $this->view->disable();
     $bod = $this->dispatcher->getParam('bodega');
@@ -573,7 +578,7 @@ class InventariosController extends ControllerBase  {
         // Crear movimiento nuevo
         $num = $this->ultimoNumeroMovimiento($datos->Tipo, $datos->SucursalId);
         $mov = new Movimientos();
-        $mov->numero = $num + 1;
+        $mov->Numero = $num + 1;
         $mov->Tipo = $datos->Tipo;
         $mov->Fecha = $datos->Fecha;
         $mov->BodegaId = $datos->BodegaId;
@@ -740,4 +745,307 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($msj));
     $this->response->send();
   }
+  #endregion
+
+  #region Compras
+  public function comprasBuscarAction() {
+    $this->view->disable();
+    $bod = $this->dispatcher->getParam('sucursal');
+    $tipoBusca = $this->dispatcher->getParam('tipobusca');
+    $tipoMov = $this->dispatcher->getParam('tipo');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $estado = $this->dispatcher->getParam('estado');
+    $clase = $this->dispatcher->getParam('clase');
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta');
+    $condicion = "Tipo = " . $tipoMov . " AND SucursalId = " . $bod. " AND ";
+    $res = [];
+    if ($clase < 2) {
+      $condicion .= "Fecha >= '" . $desde . " 0:00:00' AND Fecha <= '" . $hasta . " 23:59:59'"; 
+    } else {
+      if (strlen($filtro) > 0) {
+        if ($clase == 2) {
+          $filtro = str_replace('%20', ' ', $filtro);
+          if ($tipoBusca == 0) {
+            // Comenzando por
+            $filtro .= '%';
+          } else {
+            // Conteniendo
+            $filtroSP = str_replace('  ', ' ',trim($filtro));
+            $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+          }
+          $condicion .= " Notas like '" . $filtro . "'";
+        } else {
+          $condicion .= 'Numero = ' . $filtro;
+        }
+      }
+    }
+    if ($estado == 0) {
+      if (strlen($condicion) > 0) {
+        $condicion .= ' AND ';      
+        $condicion .= 'Estado != 2';
+      }
+    }
+    $res = Compras::find([
+      'conditions' => $condicion,
+      'order' => 'Fecha'
+    ]);
+
+    if ($res->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function compraGuardarAction() {
+    try {
+      $datos = $this->request->getJsonRawBody();
+      $ret = (object) [
+        'res' => false,
+        'cid' => $datos->Id,
+        'com' => null,
+        'msj' => 'Los datos no se pudieron procesar'
+      ];
+      $this->response->setStatusCode(406, 'Not Acceptable');
+      $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
+      $datos->Fecha = str_replace('Z', '', $datos->Fecha);
+      if ($datos->Id > 0) {
+        // Traer movimiento por id y acualizar
+        $mov = Compras::findFirstById($datos->Id);
+        $mov->Tipo = $datos->Tipo;
+        $mov->Numero = $datos->Numero;
+        $mov->Especie = $datos->Especie;
+        $mov->ProveedorId = $datos->ProveedorId;
+        $mov->Fecha = $datos->Fecha; 
+        $mov->Notas = $datos->Notas;
+        $mov->PorcentajeDescuento = $datos->PorcentajeDescuento;
+        $mov->BodegaId = $datos->BodegaId;
+        $mov->Plazo = $datos->Plazo;
+        $mov->Subtotal = $datos->Subtotal;
+        $mov->SubtotalEx = $datos->SubtotalEx;
+        $mov->PorcentajeCompra = $datos->PorcentajeCompra;
+        $mov->Descuento = $datos->Descuento;
+        $mov->Recargo = $datos->Recargo; 
+        $mov->Flete = $datos->Flete; 
+        $mov->Impuestos = $datos->Impuestos;
+        $mov->Pagos = $datos->Pagos;
+        $mov->CostoFinal = $datos->CostoFinal;
+        $mov->SucursalId = $datos->SucursalId;
+        $mov->Estado = $datos->Estado;
+        if($mov->update()) {
+          $ret->res = true;
+          $ret->cid = $datos->Id;
+          // Quitar items eliminados
+          foreach ($datos->itemsEliminados as $mie) {          
+            $eli = ComprasItems::findFirstById($mie->Id);
+            if ($eli != false) {
+              $eli->delete();
+            }
+          }          
+          // crear los items actualues
+          foreach ($datos->relItems as $mi) {            
+            $ins = null;
+            if ($mi->Id > 0) {
+              $ins = ComprasItems::findFirstById($mi->Id);
+            } else {              
+              $ins = new ComprasItems();
+              $ins->CompraId = $mov->Id;
+            }
+            if ($ins != null) {
+              $ins->ProductoId = $mi->ProductoId;
+              $ins->Cantidad = $mi->Cantidad;
+              $ins->Costo = $mi->Costo;
+              $ins->Descuento = $mi->Descuento;
+              $ins->Bodega = $mi->Bodega;
+              $ins->Adicional = $mi->Adicional;
+              $ins->Bultos = $mi->Bultos;
+              $ins->Lote = $mi->Lote;
+              $ins->Expiracion = $mi->Expiracion;
+              $ins->BultoCosto = $mi->BultoCosto;
+              if ($mi->Id > 0) {
+                $ins->update();
+              } else {
+                $ins->create();
+              }
+            }
+          }
+          // Procesar items de impuestos          
+          foreach ($datos->relImpuestos as $imp) {
+            $ins = ComprasImpuestos::findFirst([
+              'conditions' => 'CompraId = ' . $mov->Id . ' AND ImpuestoId = ' . $imp->ImpuestoId
+            ]);
+            if ($ins != null) {
+              $ins->Porcentaje = $imp->Porcentaje;
+              $ins->Base = $imp->Base;
+              $ins->Valor = $imp->Valor;
+              if (!$ins->update()) {
+                $msj = "No se puede actualizar los datos: ";
+                foreach ($ins->getMessages() as $m) {            
+                  $msj .= $m . " ";
+                }
+                $ret->res = false;
+                $ret->msj = $msj;
+              }
+            } else {
+              $o = new ComprasImpuestos();
+              $o->Id = 0;
+              $o->CompraId = $mov->Id;
+              $o->ImpuestoId = $imp->ImpuestoId;
+              $o->Porcentaje = $imp->Porcentaje;
+              $o->Base = $imp->Base;
+              $o->Valor = $imp->Valor;
+              if (!$o->create()) {
+                $msj = "No se puede actualizar los datos: ";
+                foreach ($o->getMessages() as $m) {            
+                  $msj .= $m . " ";
+                }
+                $ret->res = false;
+                $ret->msj = $msj;
+              }
+            }
+          }
+          if ($ret->res) {
+            $ret->msj = "Se actualizo correctamente los datos de la transaccion";
+            $this->response->setStatusCode(200, 'Ok');
+          } else {
+            $this->response->setStatusCode(500, 'Error');
+          }
+        } else {
+          $msj = "No se puede actualizar los datos: ";
+          foreach ($mov->getMessages() as $m) {            
+            $msj .= $m . " ";
+          }
+          $ret->res = false;
+          $ret->cid = $datos->Id;
+          $ret->msj = $msj;
+        }
+      } else {
+        // Crear movimiento nuevo
+        $num = $this->ultimoNumeroCompra($datos->Tipo, $datos->SucursalId);
+        $mov = new Compras();
+        $mov->Numero = $num + 1;
+        $mov->Tipo = $datos->Tipo;
+        $mov->Especie = $datos->Especie;
+        $mov->ProveedorId = $datos->ProveedorId;
+        $mov->Fecha = $datos->Fecha; 
+        $mov->Notas = $datos->Notas;
+        $mov->PorcentajeDescuento = $datos->PorcentajeDescuento;
+        $mov->BodegaId = $datos->BodegaId;
+        $mov->Plazo = $datos->Plazo;
+        $mov->Subtotal = $datos->Subtotal;
+        $mov->SubtotalEx = $datos->SubtotalEx;
+        $mov->PorcentajeCompra = $datos->PorcentajeCompra;
+        $mov->Descuento = $datos->Descuento;
+        $mov->Recargo = $datos->Recargo; 
+        $mov->Flete = $datos->Flete; 
+        $mov->Impuestos = $datos->Impuestos;
+        $mov->Pagos = $datos->Pagos;
+        $mov->CostoFinal = $datos->CostoFinal;
+        $mov->SucursalId = $datos->SucursalId;
+        $mov->Estado = 0;
+        if ($mov->create()) {
+          $ret->res = true;
+          $ret->cid = $mov->Id;
+          $ret->num = $mov->Numero;
+          $ret->msj = "Transaccion registrada exitosamente";  
+          // Crear items /*y afectar el inventario*/
+          foreach ($datos->relItems as $mi) {
+            $ins = new ComprasItems();
+            $ins->CompraId = $mov->Id;
+            $ins->ProductoId = $mi->ProductoId;
+            $ins->Cantidad = $mi->Cantidad;
+            $ins->Costo = $mi->Costo;
+            $ins->Descuento = $mi->Descuento;
+            $ins->Bodega = $mi->Bodega;
+            $ins->Adicional = $mi->Adicional;
+            $ins->Bultos = $mi->Bultos;
+            $ins->Lote = $mi->Lote;
+            $ins->Expiracion = $mi->Expiracion;
+            $ins->BultoCosto = $mi->BultoCosto;
+            $ins->create();
+          }
+          foreach ($datos->relImpuestos as $im) {
+            $ins = new ComprasImpuestos();
+            $ins->CompraId = $mov->Id;
+            $ins->ImpuestoId = $im->ImpuestoId;
+            $ins->Porcentaje = $im->Porcentaje;
+            $ins->Base = $im->Base;
+            $ins->Valor = $im->Valor;
+            $ins->create();
+          }
+          $this->response->setStatusCode(201, 'Created');
+        } else {
+          $msj = "No se pudo crear el nuevo registro: " . "\n";
+          foreach ($mov->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->num = 0;
+          $ret->msj = $msj;
+        }
+      }
+      $ret->com = Compras::findFirstById($ret->cid);
+    } catch (Exception $e) {
+      $this->response->setStatusCode(500, 'Error');
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $e->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  private function ultimoNumeroCompra($tipo, $suc) {
+    return Compras::maximum([
+      'column' => 'Numero',
+      'conditions' => 'Tipo = ' . $tipo . ' AND SucursalId = ' . $suc
+    ]) ?? 0;
+  }
+
+  public function compraPorIdAction() {
+    $id = $this->dispatcher->getParam('id');
+    $res = Compras::findFirstById($id);
+    if ($res != false) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $res = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function compraModificarEstadoAction() {
+    $id = $this->dispatcher->getParam('id');
+    $est = $this->dispatcher->getParam('estado');
+    $mov = Compras::findFirstById($id);
+    if ($mov != false) {
+      $mov->estado = $est;
+      if($mov->update()) {
+        $msj = "La operacion se ejecuto exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($mov->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
+  #endregion
 }

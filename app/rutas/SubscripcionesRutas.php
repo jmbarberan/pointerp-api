@@ -14,5 +14,10 @@ class SubscripcionesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'conexionPorCodigo',
     ]);
+
+    $this->addPost('/codigo/validar', [
+      'controller' => $controlador,
+      'action'     => 'codigoValido',
+    ]);
   }
 }

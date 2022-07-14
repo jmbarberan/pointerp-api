@@ -30,5 +30,9 @@ class AjustesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'plantillasPorTipo',
     ]);
+    $this->addGet('/encabezados', [
+      'controller' => $controlador,
+      'action'     => 'encabezados',
+    ]);
   }
 }

@@ -11,7 +11,12 @@ use Phalcon\Mvc\View\Engine\Volt as VoltEngine;
 use Phalcon\Session\Adapter\Stream as SessionAdapter;
 use Phalcon\Session\Manager as SessionManager;
 use Phalcon\Url as UrlResolver;
-use Pointerp\Library\Prevuelo;
+use Phalcon\Http\Request;
+use Phalcon\Db;
+use Phalcon\Db\Exception;
+use Phalcon\Db\Adapter\Pdo\Postgresql as PgConnection;
+//use Pointerp\Library\Prevuelo;
+
 
 /**
  * Shared configuration service
@@ -37,7 +42,6 @@ $di->setShared('url', function () {
  */
 $di->setShared('view', function () {
     $config = $this->getConfig();
-
     $view = new View();
     $view->setDI($this);
     $view->setViewsDir($config->application->viewsDir);
@@ -66,16 +70,58 @@ $di->setShared('view', function () {
  * Database connection is created based in the parameters defined in the configuration file
  */
 $di->setShared('db', function () {
+    $request = new Request();
+    $connection = new PgConnection(
+        [
+            "host"     => getenv('DBS_HOST'),
+            "username" => getenv('DBS_USER'),
+            "password" => getenv('DBS_PASS'),
+            "dbname"   => getenv('DBS_NAME'),
+            "port"     => getenv('DBS_PORT'),
+        ]
+    );
+    $con = $connection->fetchAll(
+        "SELECT id, dbhost, dbname, dbuser, dbpass, dbport, dbdriver " .
+        "FROM subscripciones.subscripciones " . 
+        "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
+    );
+    if (count($con) > 0) {
+        $con = reset($con);
+        $params = [
+            'host'     => $con['dbhost'],
+            'username' => $con['dbuser'],
+            'password' => $con['dbpass'],
+            'dbname'   => $con['dbname'],
+            //'charset'  => $config->database->charset,
+            'port'     => $con['dbport'],
+        ];
+    } else {
+        $params = [
+            'host'     => $config->dbfallback->host,
+            'username' => $config->dbfallback->user,
+            'password' => $config->dbfallback->pass,
+            'dbname'   => $config->dbfallback->name,
+            //'charset'  => $config->database->charset,
+            'port'     => $config->dbfallback->port,
+        ];
+    }
+
+    $class = 'Phalcon\Db\Adapter\Pdo\\' . $con['dbdriver'];
+
+    return new $class($params);
+});
+
+$di->setShared('dbSubscripciones', function () {
     $config = $this->getConfig();
 
-    $class = 'Phalcon\Db\Adapter\Pdo\\' . $config->database->adapter;
+    $class = 'Phalcon\Db\Adapter\Pdo\\' . $config->dbsubscripciones->adapter;
     $params = [
-        'host'     => $config->database->host,
-        'username' => $config->database->username,
-        'password' => $config->database->password,
-        'dbname'   => $config->database->dbname,
+        'host'     => $config->dbsubscripciones->host,
+        'username' => $config->dbsubscripciones->username,
+        'password' => $config->dbsubscripciones->password,
+        'dbname'   => $config->dbsubscripciones->dbname,
         //'charset'  => $config->database->charset,
-        'port'     => $config->database->port,
+        'port'     => $config->dbsubscripciones->port,
     ];
 
     /*if ($config->database->adapter == 'Mysql') {
@@ -84,7 +130,6 @@ $di->setShared('db', function () {
 
     return new $class($params);
 });
-
 
 /**
  * If the configuration specify the use of metadata adapter use it or use memory otherwise

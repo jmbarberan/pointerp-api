@@ -81,6 +81,56 @@ class InventariosController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function productoSeleccionarAction() {
+    $eliminados = $this->dispatcher->getParam('estado');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $empresa = $this->dispatcher->getParam('emp');
+    $buscaExt = $this->dispatcher->getParam('extendida');
+
+    $res = null;
+    if (strpos($filtro, '%20') === false) {
+      $campo = "Codigo = '" . $filtro . "'";
+      $condicion = "EmpresaId = " . $empresa . " AND " . $campo;
+      if ($eliminados == 0) {
+          $condicion .= ' AND Estado = 0';
+      }
+      $res = Productos::find([
+        'conditions' => $condicion,
+        'order' => 'Nombre'
+      ]);
+    }
+    
+    if ($res === null || $res->count() <= 0) {
+      $filtro = str_replace('%20', ' ', $filtro);
+      $filtro = str_replace('%C3%91' , 'Ñ',$filtro);
+      $filtro = str_replace('%C3%B1' , 'ñ',$filtro);
+      if ($buscaExt == 0) {
+        $filtro .= '%';
+      } else {
+        $filtroSP = str_replace('  ', ' ',trim($filtro));
+        $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+      }
+      $campo = "Nombre like '" . $filtro . "'";
+      $condicion = "EmpresaId = " . $empresa . " AND " . $campo;
+      if ($eliminados == 0) {
+          $condicion .= ' AND Estado = 0';
+      }
+      $res = Productos::find([
+        'conditions' => $condicion,
+        'order' => 'Nombre'
+      ]);
+    }
+
+    if ($res->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
   public function productosEmpresaEstadoAction() {
     $this->view->disable();
     $estado = $this->dispatcher->getParam('estado');

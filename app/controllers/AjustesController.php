@@ -9,6 +9,10 @@ use Pointerp\Modelos\Sucursales;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Reportes;
 
+use Phalcon\Db;
+use Phalcon\Db\Exception;
+use Phalcon\Db\Adapter\Pdo\Postgresql as PgConnection;
+
 class AjustesController extends ControllerBase  {
 
   public function clavePorIdAction() {
@@ -77,7 +81,14 @@ class AjustesController extends ControllerBase  {
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $this->response->setStatusCode(404, 'Not found');
-    }
+    }    
+    /*$res = [];
+    $emp = (object) [
+        'Id' => 1,
+        'Nombre' => "Softeq",
+        'Estado' => 0
+      ];
+    array_push($res, $emp);*/
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
     $this->response->send();
@@ -98,6 +109,31 @@ class AjustesController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function encabezadosAction() {
+    /*$connection = new PgConnection(
+        [
+            "host"     => "localhost",
+            "username" => "postgres",
+            "password" => "jmbg",
+            "dbname"   => "viniapro",
+            "port"     => "5435",
+        ]
+    );
+    $result = $connection->fetchAll(
+        "SELECT id, dbhost, dbname, dbuser, dbpass, dbport, dbdriver FROM subscripciones.subscripciones Where usuario = '" . $this->request->getHeaders()['Subscriber'] . "'"
+    );
+    $con = reset($result);*/
+    $codigo = $this->request->getHeaders()['Authorization'] . "'";
+    //$deco = base64_encode($this->request->getHeaders()['Authorization'] . "'"); 
+    $deco = base64_decode($codigo);
+    //print_r($deco);
+    //echo $deco;
+    $this->response->setStatusCode(200, 'Ok');
+    $this->response->setContentType('text/plain', 'UTF-8');
+    $this->response->setContent($deco);
     $this->response->send();
   }
 }

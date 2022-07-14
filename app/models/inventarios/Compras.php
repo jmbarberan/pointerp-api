@@ -48,14 +48,14 @@ class Compras extends Modelo
       $res['relSucursal'] = $this->relSucursal->toArray();
     }
     if ($this->relProveedor != null) {   
-      $res['relProveedor'] = $this->relProveedor->toArray();
+      $res['relProveedor'] = $this->relProveedor->asUnicodeArray(['Nombre']);
     }
     if ($this->relItems != null) {   
       $items = [];
       foreach ($this->relItems as $compraItem) {
         $itemToAdd = $compraItem->toArray();  
         if ($compraItem->relProducto != null) {
-          $productoArray = $compraItem->relProducto->toArray();
+          $productoArray = $compraItem->relProducto->asUnicodeArray([ 'Codigo', 'Nombre', 'Descripcion', 'Medida' ]);
           if ($compraItem->relProducto->relImposiciones != null) {
             $imposicionesPorProducto = [];
             foreach ($compraItem->relProducto->relImposiciones as $imp) {

@@ -1,10 +1,11 @@
 <?php
+use Phalcon\Http\Request;
 
 defined('BASE_PATH') || define('BASE_PATH', getenv('BASE_PATH') ?: realpath(dirname(__FILE__) . '/../..'));
 defined('APP_PATH') || define('APP_PATH', BASE_PATH . '/app');
 
 return new \Phalcon\Config([
-    'database' => [
+    'dbfallback' => [
         'adapter'     => 'Mysql',
         'host'        => getenv('DB_HOST'),
         'username'    => getenv('DB_USER'),
@@ -12,6 +13,15 @@ return new \Phalcon\Config([
         'dbname'      => getenv('DB_NAME'),
         'charset'     => 'utf8',
         'port'        => 3306
+    ],
+    'dbsubscripciones' => [
+        'adapter'     => 'Postgresql',
+        'host'        => getenv('DBS_HOST'),
+        'username'    => getenv('DBS_USER'),
+        'password'    => getenv('DBS_PASS'),
+        'dbname'      => getenv('DBS_NAME'),
+        'charset'     => 'utf8',
+        'port'        => getenv('DBS_PORT'),
     ],
     'application' => [
         'appDir'         => APP_PATH . '/',

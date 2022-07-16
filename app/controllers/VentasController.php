@@ -13,6 +13,7 @@ use Pointerp\Modelos\Medicos\Consultas;
 
 class VentasController extends ControllerBase  {
 
+  #region comprobantes
   public function ventasBuscarAction() {
     $this->view->disable();
     $suc = $this->dispatcher->getParam('sucursal'); // Solo se consulta una sucursal
@@ -262,6 +263,72 @@ class VentasController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function ventaPorIdAction() {
+    $id = $this->dispatcher->getParam('id');
+    $res = Ventas::findFirstById($id);
+    if ($res != false) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $res = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function ventaPorNumeroAction() {
+    $tipo = $this->dispatcher->getParam('tipo');
+    $num = $this->dispatcher->getParam('numero');
+    $rows = Ventas::find([
+      'conditions' => 'Tipo = :tip: AND Numero = :num:',
+      'bind' => [ 'tip' => $tipo, 'num' => $num ]
+    ]);
+    if ($rows->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $rows = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function ventaModificarEstadoAction() {
+    $id = $this->dispatcher->getParam('id');
+    $est = $this->dispatcher->getParam('estado');
+    $ven = Ventas::findFirstById($id);
+    if ($ven != false) {
+      $ven->estado = $est;
+      if($ven->update()) {
+        $msj = "La operacion se ejecuto exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($ven->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
+  #endregion
+
+  private function ultimoNumeroVenta($tipo) {
+    return Ventas::maximum([
+      'column' => 'Numero',
+      'conditions' => 'Tipo = ' . $tipo
+    ]) ?? 0;
+  }
+
   private function afectarInventario($item, $bod, $origen, $signo) {
     $res = Kardex::find([
       'conditions' => 'ProductoId = :pro: AND BodegaId = :bod:',
@@ -323,13 +390,6 @@ class VentasController extends ControllerBase  {
     return $msj;
   }
 
-  private function ultimoNumeroVenta($tipo) {
-    return Ventas::maximum([
-      'column' => 'Numero',
-      'conditions' => 'Tipo = ' . $tipo
-    ]) ?? 0;
-  }
-
   private function signoPorTipo($tipo) {
     $this->view->disable();
     $res = Registros::find([
@@ -342,62 +402,5 @@ class VentasController extends ControllerBase  {
     } else {
       return 0;
     }
-  }
-
-  public function ventaPorIdAction() {
-    $id = $this->dispatcher->getParam('id');
-    $res = Ventas::findFirstById($id);
-    if ($res != false) {
-        $this->response->setStatusCode(200, 'Ok');
-    } else {
-        $res = [];
-        $this->response->setStatusCode(404, 'Not found');
-    }
-    $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($res));
-    $this->response->send();
-  }
-
-  public function ventaPorNumeroAction() {
-    $tipo = $this->dispatcher->getParam('tipo');
-    $num = $this->dispatcher->getParam('numero');
-    $rows = Ventas::find([
-      'conditions' => 'Tipo = :tip: AND Numero = :num:',
-      'bind' => [ 'tip' => $tipo, 'num' => $num ]
-    ]);
-    if ($rows->count() > 0) {
-        $this->response->setStatusCode(200, 'Ok');
-    } else {
-        $rows = [];
-        $this->response->setStatusCode(404, 'Not found');
-    }
-    $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($rows));
-    $this->response->send();
-  }
-
-  public function ventaModificarEstadoAction() {
-    $id = $this->dispatcher->getParam('id');
-    $est = $this->dispatcher->getParam('estado');
-    $ven = Ventas::findFirstById($id);
-    if ($ven != false) {
-      $ven->estado = $est;
-      if($ven->update()) {
-        $msj = "La operacion se ejecuto exitosamente";
-        $this->response->setStatusCode(200, 'Ok');
-      } else {
-        $this->response->setStatusCode(404, 'Error');
-        $msj = "No se puede actualizar los datos: " . "\n";
-        foreach ($ven->getMessages() as $m) {
-          $msj .= $m . "\n";
-        }
-      }
-    } else {
-      $msj = "No se encontro el registro";
-      $this->response->setStatusCode(404, 'Not found');
-    }
-    $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($msj));
-    $this->response->send();
   }
 }

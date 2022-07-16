@@ -43,7 +43,8 @@ class SubscripcionesController extends ControllerBase  {
     $res = (object) [
       'res' => false,
       'cid' => 0,
-      'tipo' => 0,
+      'nom' => '',
+      'tipo' => 0,      
       'msj' => 'El codigo no es valido'
     ];
     $datos = $this->request->getJsonRawBody();
@@ -56,7 +57,8 @@ class SubscripcionesController extends ControllerBase  {
         $this->response->setStatusCode(200, 'Ok');
         $res->res = true;
         $res->cid = $sub->id;
-        $res->tipo = $sub->dbname;
+        $res->tipo = $sub->dbexclusive;
+        $res->nom = $sub->nombre;
         $res->msj = 'Codigo correcto';
       }
     }

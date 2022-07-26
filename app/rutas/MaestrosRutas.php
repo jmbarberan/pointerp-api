@@ -20,6 +20,11 @@ class MaestrosRutas extends \Phalcon\Mvc\Router\Group
       'action'     => 'clientesPorNombresEstado',
     ]);
 
+    $this->addGet('/clientes/estado/{estado}/atrib/{atrib}/filtro/{filtro}/emp/{emp}/buscar', [
+      'controller' => $controlador,
+      'action'     => 'clientesBuscar',
+    ]);
+
     $this->addGet('/proveedores/cedula/{ced}', [
       'controller' => $controlador,
       'action'     => 'proveedoresPorCedula',

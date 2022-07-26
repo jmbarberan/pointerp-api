@@ -99,24 +99,16 @@ class VentasController extends ControllerBase  {
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
-        'num' => $datos->Numero,
+        'vta' => null,
         'msj' => 'Los datos no se pudieron procesar'
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
-      $signo = $this->signoPorTipo($datos->Tipo);
+      $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
+      $datos->Fecha = str_replace('Z', '', $datos->Fecha); 
+      // Si el cliente id es 0 crearlo
       if ($datos->Id > 0) {
         // Traer movimiento por id y acualizar
         $ven = Ventas::findFirstById($datos->id);
-        // Traer los items anteriores, reversar el inventario y eliminar estos items 
-        foreach ($ven->relItems as $mie) {
-          if ($signo != 0 && !is_null($mie->relProducto->relTipo) && $mie->relProducto->relTipo->Contenedor > 0) { // Signo 0 no afecta el inventario
-            $msx = $this->afectarInventario($mie, $ven->BodegaId, -1, $signo);
-          }
-          $eli = VentasItems::findFirstById($mie->Id);
-          if ($eli != false) {
-            $eli->delete();
-          }
-        }
         $ven->Fecha = $datos->Fecha;
         $ven->SucursalId = $datos->SucursalId;
         $ven->BodegaId = $datos->BodegaId; // BodegaId
@@ -148,27 +140,74 @@ class VentasController extends ControllerBase  {
         if($ven->update()) {
           $ret->res = true;
           $ret->cid = $datos->Id;
-          // crear los items actuales
-          foreach ($datos->relItems as $mi) {
-            $ins = new VentasItems();
-            $ins->VentaId = $ven->Id;
-            $ins->ProductoId = $mi->ProductoId;
-            $ins->Bodega = $mi->Bodega; // Bodega
-            $ins->Cantidad = $mi->Cantidad;
-            $ins->Precio = $mi->Precio;
-            $ins->Descuento = $mi->Descuento;
-            $ins->Adicional = $mi->Adicional;
-            $ins->Despachado = $mi->Despachado;
-            //$ins->LoteId = $mi->LoteId;
-            //$ins->PresentacionId = $mi->PresentacionId;
-            $ins->Costo = $mi->Costo;
-            $ins->create();
-            // Afectar el inventario
-            if ($signo != 0 && !is_null($mi->relProducto->relTipo) && $mi->relProducto->relTipo->contenedor > 0) { // Signo 0 no afecta el inventario
-              $msx = $this->afectarInventario($mi, $ven->movimiento_id, 0, $signo);
+          // Quitar items eliminados
+          foreach ($datos->itemsEliminados as $mie) {          
+            $eli = VentasItems::findFirstById($mie->Id);
+            if ($eli != false) {
+              $eli->delete();
+            }
+          }          
+          // crear los items nuevos y acuatualizar los modiifcados
+          foreach ($datos->relItems as $mi) {            
+            $ins = null;
+            if ($mi->Id > 0) {
+              $ins = VentasItems::findFirstById($mi->Id);
+            } else {
+              $ins = new VentasItems();
+              $ins->VentaId = $ven->Id;
+            }
+            if ($ins != null) {
+              $ins->Bodega = $mi->Bodega; // Bodega
+              $ins->Cantidad = $mi->Cantidad;
+              $ins->Precio = $mi->Precio;
+              $ins->Descuento = $mi->Descuento;
+              $ins->Adicional = $mi->Adicional;
+              $ins->Despachado = $mi->Despachado;
+              $ins->Costo = $mi->Costo;
+              if ($mi->Id > 0) {
+                $ins->update();
+              } else {
+                $ins->create();
+              }
             }
           }
-          $ret->msj = "Se actualizo correctamente los datos del registro";
+          
+          // Procesar items de impuestos          
+          foreach ($datos->relImpuestos as $imp) {
+            $ins = VentasImpuestos::findFirst([
+              'conditions' => 'VentaId = ' . $mov->Id . ' AND ImpuestoId = ' . $imp->ImpuestoId
+            ]);
+            if ($ins != null) {
+              $ins->Porcentaje = $imp->Porcentaje;
+              $ins->base = $imp->base;
+              $ins->Valor = $imp->Valor;
+              if (!$ins->update()) {
+                $msj = "No se puede actualizar los datos: ";
+                foreach ($ins->getMessages() as $m) {            
+                  $msj .= $m . " ";
+                }
+                $ret->res = false;
+                $ret->msj = $msj;
+              }
+            } else {
+              $o = new VentasImpuestos();
+              $o->Id = 0;
+              $o->CompraId = $ven->Id;
+              $o->ImpuestoId = $imp->ImpuestoId;
+              $o->Porcentaje = $imp->Porcentaje;
+              $o->base = $imp->base;
+              $o->Valor = $imp->Valor;
+              if (!$o->create()) {
+                $msj = "No se puede actualizar los datos: ";
+                foreach ($o->getMessages() as $m) {
+                  $msj .= $m . " ";
+                }
+                $ret->res = false;
+                $ret->msj = $msj;
+              }
+            }
+          }
+          $ret->msj = "Se actualizo correctamente la transaccion";       
           $this->response->setStatusCode(200, 'Ok');
         } else {
           $msj = "No se puede actualizar los datos: " . "\n";
@@ -181,10 +220,10 @@ class VentasController extends ControllerBase  {
         }
       } else {
         // Crear factura nuevo
-        $num = $this->ultimoNumeroVenta($datos->tipo);
+        $num = $this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId);
         $ven = new Ventas();
-        $ven->Tipo = $datos->Tipo;
         $ven->Numero = $num + 1;
+        $ven->Tipo = $datos->Tipo;
         $ven->Fecha = $datos->Fecha;
         $ven->SucursalId = $datos->SucursalId;
         $ven->BodegaId = $datos->BodegaId; // BodegaId
@@ -206,7 +245,7 @@ class VentasController extends ControllerBase  {
         $ven->Especie = $datos->Especie; // receta, servicio medico
         $ven->CEClaveAcceso = $datos->CEClaveAcceso;
         $ven->CEAutorizacion = $datos->CEAutorizacion;
-        $ven->CEAutorizacionFecha = $datos->CEAutorizacionFecha;
+        $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
         $ven->CEContenido = $datos->CEContenido;
         $ven->CEEtapa = $datos->CEEtapa;
         $ven->CERespuestaId = $datos->CERespuestaId;
@@ -218,11 +257,8 @@ class VentasController extends ControllerBase  {
           $ret->cid = $ven->Id;
           $ret->num = $ven->Numero;
           $ret->msj = "Se registro correctamente la nueva transaccion";  
-          // Crear items y afectar el inventario
+          // Crear items
           foreach ($datos->relItems as $mi) {
-            if ($signo != 0 && !is_null($mi->relProducto->relTipo) && $mi->relProducto->relTipo->contenedor > 0) { // Signo 0 no afecta el inventario
-              $msj = $this->afectarInventario($mi, $ven->movimiento_id, 0, $signo);
-            }
             $ins = new VentasItems();
             $ins->VentaId = $ven->Id;
             $ins->ProductoId = $mi->ProductoId;
@@ -232,29 +268,31 @@ class VentasController extends ControllerBase  {
             $ins->Descuento = $mi->Descuento;
             $ins->Adicional = $mi->Adicional;
             $ins->Despachado = $mi->Despachado;
-            //$ins->LoteId = $mi->LoteId;
-            //$ins->PresentacionId = $mi->PresentacionId;
             $ins->Costo = $mi->Costo;
-            if (!$ins->create()) {
-              foreach ($ins->getMessages() as $m) {
-                $msj .= $m . "\n";
-              }
-            }
-          }  
-          $this->response->setStatusCode(201, 'Created ' . $msj);
+            $ins->create();
+          }
+          foreach ($datos->relImpuestos as $im) {
+            $ins = new VentasImpuestos();
+            $ins->VentaId = $ven->Id;
+            $ins->ImpuestoId = $im->ImpuestoId;
+            $ins->Porcentaje = $im->Porcentaje;
+            $ins->base = $im->base;
+            $ins->Valor = $im->Valor;
+            $ins->create();
+          }
+          $this->response->setStatusCode(201, 'Created');
         } else {
           $msj = "No se pudo crear el nuevo registro: " . "\n";
           foreach ($ven->getMessages() as $m) {
             $msj .= $m . "\n";
           }
-          $ret->res = false;
           $ret->cid = 0;
           $ret->msj = $msj;
         }
       }
+      $ret->ven = Ventas::findFirstById($ret->cid);
     } catch (Exception $e) {
       $this->response->setStatusCode(500, 'Error');
-      $ret->res = false;
       $ret->cid = 0;
       $ret->msj = $e->getMessage();
     }
@@ -266,7 +304,7 @@ class VentasController extends ControllerBase  {
   public function ventaPorIdAction() {
     $id = $this->dispatcher->getParam('id');
     $res = Ventas::findFirstById($id);
-    if ($res != false) {
+    if ($res) {
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $res = [];
@@ -322,10 +360,10 @@ class VentasController extends ControllerBase  {
 
   #endregion
 
-  private function ultimoNumeroVenta($tipo) {
+  private function ultimoNumeroVenta($tipo, $suc) {
     return Ventas::maximum([
       'column' => 'Numero',
-      'conditions' => 'Tipo = ' . $tipo
+      'conditions' => 'Tipo = ' . $tipo . ' AND SucursalId = ' . $suc
     ]) ?? 0;
   }
 

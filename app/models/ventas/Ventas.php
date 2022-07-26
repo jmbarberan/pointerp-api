@@ -34,7 +34,7 @@ class Ventas extends Modelo
   }
   
   public function jsonSerialize () : array {
-    $res = $this->toUnicodeArray();
+    $res = $this->asUnicodeArray(["Notas"]);
     if ($this->relSucursal != null) {   
       $res['relSucursal'] = $this->relSucursal->toArray();
     }
@@ -42,14 +42,14 @@ class Ventas extends Modelo
       $res['relBodega'] = $this->relBodega->toArray();
     }
     if ($this->relCliente != null) {   
-      $res['relCliente'] = $this->relCliente->toUnicodeArray();
+      $res['relCliente'] = $this->relCliente->asUnicodeArray(["Nombres"]);
     }
     if ($this->relItems != null) {   
       $items = [];
       foreach ($this->relItems as $it) {
         if ($it->relProducto != null) {
           $ins = $it->toArray();
-          $ins['relProducto'] = $it->relProducto->toUnicodeArray();
+          $ins['relProducto'] = $it->relProducto->asUnicodeArray(['Codigo', 'Nombre', 'Descripcion', 'Medida']);
           array_push($items, $ins);
         }
       }

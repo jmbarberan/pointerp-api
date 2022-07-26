@@ -25,7 +25,11 @@ class Modelo extends Model
         $res = $this->toArray();
         foreach ($arry as $atrib) {
             if (is_string($res[$atrib])) {
-                $res[$atrib] = utf8_encode($res[$atrib]);
+                if (mb_check_encoding($res[$atrib], "UTF-8")) {
+                    $res[$atrib] = utf8_encode($res[$atrib]);
+                } else {
+                    $res[$atrib] = mb_convert_encoding($res[$atrib], 'UTF-8', 'UTF-8');
+                }
             }
         }
         return $res;

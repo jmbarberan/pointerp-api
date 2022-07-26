@@ -19,7 +19,7 @@ class VentasItems extends Modelo {
   public function jsonSerialize () : array {
     $res = $this->toArray();
     if ($this->relProducto != null) {   
-      $res['relProducto'] = $this->relProducto->toArray();
+      $res['relProducto'] = $this->relProducto->asUnicodeArray(['Codigo', 'Nombre', 'Descripcion', 'Medida']);
     }
     return $res;
   } 

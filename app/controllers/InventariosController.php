@@ -896,7 +896,7 @@ class InventariosController extends ControllerBase  {
               $eli->delete();
             }
           }          
-          // crear los items actualues
+          // crear los items nuevos y modificar los actuales
           foreach ($datos->relItems as $mi) {            
             $ins = null;
             if ($mi->Id > 0) {

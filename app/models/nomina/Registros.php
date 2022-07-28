@@ -1,6 +1,6 @@
 <?php
 
-namespace Pointerp\Modelos\Maestros;
+namespace Pointerp\Modelos\Nomina;
 
 use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
@@ -11,6 +11,6 @@ class Registros extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    return $this->asUnicodeArray(["Denominacion", "Codigo"]);
+    return $this->asUnicodeArray(["denominacion", "codigo"]);
   }
 }

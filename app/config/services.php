@@ -131,6 +131,48 @@ $di->setShared('dbSubscripciones', function () {
     return new $class($params);
 });
 
+$di->setShared('dbNomina', function () {
+    $request = new Request();
+    $connection = new PgConnection(
+        [
+            "host"     => getenv('DBS_HOST'),
+            "username" => getenv('DBS_USER'),
+            "password" => getenv('DBS_PASS'),
+            "dbname"   => getenv('DBS_NAME'),
+            "port"     => getenv('DBS_PORT'),
+        ]
+    );
+    $con = $connection->fetchAll(
+        "SELECT id, ndbhost, ndbname, ndbuser, ndbpass, ndbport, ndbdriver " .
+        "FROM subscripciones.subscripciones " . 
+        "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
+    );
+    if (count($con) > 0) {
+        $con = reset($con);
+        $params = [
+            'host'     => $con['ndbhost'],
+            'username' => $con['ndbuser'],
+            'password' => $con['ndbpass'],
+            'dbname'   => $con['ndbname'],
+            //'charset'  => $config->database->charset,
+            'port'     => $con['ndbport'],
+        ];
+    } else {
+        $params = [
+            'host'     => $config->ndbfallback->host,
+            'username' => $config->ndbfallback->user,
+            'password' => $config->ndbfallback->pass,
+            'dbname'   => $config->ndbfallback->name,
+            //'charset'  => $config->database->charset,
+            'port'     => $config->ndbfallback->port,
+        ];
+    }
+
+    $class = 'Phalcon\Db\Adapter\Pdo\\' . $con['dbdriver'];
+
+    return new $class($params);
+});
+
 /**
  * If the configuration specify the use of metadata adapter use it or use memory otherwise
  */

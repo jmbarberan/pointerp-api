@@ -9,6 +9,7 @@ class Modelo extends Model
     public function onConstruct()
     {
         $this->skipAttributesOnCreate(['Id',]);
+        $this->skipAttributesOnCreate(['id',]);
     }
 
     public function toUnicodeArray() {

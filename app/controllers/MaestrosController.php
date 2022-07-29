@@ -65,7 +65,7 @@ class MaestrosController extends ControllerBase  {
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
-      $this->response->setStatusCode(404, 'Not found ' . $filtro);
+      $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($rows));
@@ -102,7 +102,7 @@ class MaestrosController extends ControllerBase  {
   #endregion
 
   #region Proveedores
-  public function ProveedoresPorCedulaAction() {
+  public function proveedoresPorCedulaAction() {
     $ced = $this->dispatcher->getParam('ced');
     $rows = Proveedores::find([
       'conditions' => 'Identificacion = :ced:',

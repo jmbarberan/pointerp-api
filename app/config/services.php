@@ -168,7 +168,7 @@ $di->setShared('dbNomina', function () {
         ];
     }
 
-    $class = 'Phalcon\Db\Adapter\Pdo\\' . $con['dbdriver'];
+    $class = 'Phalcon\Db\Adapter\Pdo\\' . $con['ndbdriver'];
 
     return new $class($params);
 });

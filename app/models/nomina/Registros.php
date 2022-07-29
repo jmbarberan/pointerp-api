@@ -7,6 +7,8 @@ use Pointerp\Modelos\Modelo;
 
 class Registros extends Modelo {
   public function initialize() {
+    $this->setConnectionService('dbNomina');
+        $this->getModelsManager()->setModelSchema($this, 'nomina');
     $this->setSource('registros');
   }
 

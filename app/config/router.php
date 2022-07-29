@@ -7,6 +7,7 @@ use Pointerp\Rutas\MaestrosRutas;
 use Pointerp\Rutas\VentasRutas;
 use Pointerp\Rutas\SubscripcionesRutas;
 use Pointerp\Rutas\CxcRutas;
+use Pointerp\Rutas\NominaRutas;
 use Pointerp\Rutas\CorsRutas;
 
 $router = $di->getRouter();
@@ -20,6 +21,7 @@ $router->mount(new MaestrosRutas());
 $router->mount(new VentasRutas());
 $router->mount(new SubscripcionesRutas());
 $router->mount(new CxcRutas());
+$router->mount(new NominaRutas());
 
 /*$router->addGet('prueba/{texto}', [
   'controller' => 'seguridad',

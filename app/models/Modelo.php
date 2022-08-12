@@ -22,17 +22,29 @@ class Modelo extends Model
         return $res; 
     }
 
-     public function asUnicodeArray($arry) {
-        $res = $this->toArray();
-        foreach ($arry as $atrib) {
-            if (is_string($res[$atrib])) {
-                if (mb_check_encoding($res[$atrib], "UTF-8")) {
+     public function asUnicodeArray($campos) {
+        return $this->toArray();
+        /*foreach ($campos as $atrib) {
+            if (is_string($res[$atrib])) {*/
+                /*$unicoded = utf8_encode($res[$atrib]);
+                $res[$atrib] = bin2hex($unicoded);*/
+                /*$res[$atrib] = preg_replace_callback(function($txt) {
+                    return preg_replace("/\\\\u([a-f0-9]{4})/e", "iconv('UCS-4LE','UTF-8',pack('V', hexdec('U$1')))", json_encode($txt));
+                })*/
+                /*$result = preg_replace_callback(
+                    /\\\\u([a-f0-9]{4})/e", "iconv('UCS-4LE','UTF-8',pack('V', hexdec('U$1'))),
+                    function($txt) { return CallFunction($txt); },
+                    $res[$atrib]
+                );*/
+                
+                
+                /*if (mb_check_encoding($res[$atrib], "UTF-8")) {
                     $res[$atrib] = utf8_encode($res[$atrib]);
                 } else {
                     $res[$atrib] = mb_convert_encoding($res[$atrib], 'UTF-8', 'UTF-8');
-                }
-            }
-        }
-        return $res;
+                }*/
+            /*}
+        }*/
+        //return $res;
      }
 }

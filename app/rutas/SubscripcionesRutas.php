@@ -19,5 +19,20 @@ class SubscripcionesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'codigoValido',
     ]);
+
+    $this->addPost('/ticket/reseteo/solicitar', [
+      'controller' => $controlador,
+      'action'     => 'ticketReseteoSolicitar',
+    ]);
+    
+    $this->addGet('/ticket/reseteo/validar/{codigo}', [
+      'controller' => $controlador,
+      'action'     => 'ticketReseteoValidar',
+    ]);
+
+    $this->addPost('/codigo/resetear', [
+      'controller' => $controlador,
+      'action'     => 'codigoActualizar',
+    ]);
   }
 }

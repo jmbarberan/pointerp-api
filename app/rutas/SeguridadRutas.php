@@ -101,5 +101,10 @@ class SeguridadRutas extends \Phalcon\Mvc\Router\Group
             'controller' => $controlador,
             'action'     => 'prueba',
         ]);
+
+        $this->addPost('/codificar', [
+            'controller' => $controlador,
+            'action'     => 'codificar',
+        ]);
     }
 }

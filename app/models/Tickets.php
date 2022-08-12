@@ -4,13 +4,13 @@ namespace Pointerp\Modelos;
 
 use Phalcon\Mvc\Model;
 
-class Subscripciones extends Modelo
+class Tickets extends Modelo
 {
     public function initialize()
     {
         $this->setConnectionService('dbSubscripciones');
         $this->getModelsManager()->setModelSchema($this, 'subscripciones');
-        $this->setSource('subscripciones');
+        $this->setSource('tickets');
     }
 
     public function jsonSerialize () : array {

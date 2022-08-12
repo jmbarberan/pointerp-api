@@ -2,7 +2,6 @@
 
 namespace Pointerp\Modelos\Nomina;
 
-use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
 use Pointerp\Modelos\Nomina\Cargos;
 use Pointerp\Modelos\Nomina\EmpleadosCuentas;
@@ -27,12 +26,13 @@ class Empleados extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    return $this->asUnicodeArray(["nombres", "direccion", "cargo"]);
+    $res = $this->asUnicodeArray(["nombres", "direccion", "cargo"]);
     if ($this->relCargo != null) {
       $res['relCargo'] = $this->relCargo->asUnicodeArray(["denominacion", "descripcion"]);
     }
     if ($this->relCuentas != null) {
       $res['relCuentas'] = $this->relCuentas->toArray();
     }
+    return $res;
   }
 }

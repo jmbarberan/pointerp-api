@@ -2,7 +2,7 @@
 
 namespace Pointerp\Modelos\Nomina;
 
-use Phalcon\Mvc\Model;
+use Pointerp\Modelos\Modelo;
 
 class Cargos extends Modelo
 {

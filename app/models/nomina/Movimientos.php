@@ -2,7 +2,6 @@
 
 namespace Pointerp\Modelos\Nomina;
 
-use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
 use Pointerp\Modelos\Nomina\Empleados;
 

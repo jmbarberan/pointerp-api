@@ -18,9 +18,10 @@ class Movimientos extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    return $this->asUnicodeArray(["descripcion"]);
+    $res = $this->toArray(); //asUnicodeArray(["descripcion"]);
     if ($this->relEmpleado != null) {
-      $res['relEmpleado'] = $this->relEmpleado->asUnicodeArray(["nombres", "direccion", "cargo"]);
+      $res['relEmpleado'] = $this->relEmpleado->toArray(); //asUnicodeArray(["nombres", "direccion", "cargo"]);
     }
+    return $res;
   }
 }

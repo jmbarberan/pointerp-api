@@ -15,6 +15,10 @@ class NominaRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'registrosPorTabla',
     ]);
+    $this->addGet('/tablas/{tabla}/sub/{sub}/emp/{emp}/registros', [
+      'controller' => $controlador,
+      'action'     => 'registrosPorTabla',
+    ]);
     $this->addGet('/tablas/{tabla}/registro/indice/{indice}/sub/{sub}/emp/{emp}', [
       'controller' => $controlador,
       'action'     => 'registroPorTablaIndice',
@@ -44,7 +48,7 @@ class NominaRutas extends \Phalcon\Mvc\Router\Group
     ]);
     #endregion
 
-    #region
+    #region Empleados
     $this->addGet('/empleados/sub/{sub}/emp/{emp}/tipo/{tipo}/estado/{estado}/atributo/{atrib}/filtro/{filtro}/buscar', [
       'controller' => $controlador,
       'action'     => 'empleadosBuscar',
@@ -72,6 +76,25 @@ class NominaRutas extends \Phalcon\Mvc\Router\Group
     $this->addPost('/empleados/guardar', [
       'controller' => $controlador,
       'action'     => 'empleadoGuardar',
+    ]);
+    #endregion
+    
+    #region Movimientos
+    $this->addGet('/movimientos/{id}', [
+      'controller' => $controlador,
+      'action'     => 'movimientoPorId',
+    ]);
+    $this->addGet('/movimientos/sub/{sub}/emp/{emp}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipo/{tipo}/filtro/{filtro}/buscar', [
+      'controller' => $controlador,
+      'action'     => 'movimientosBuscar',
+    ]);
+    $this->addPatch('/movimientos/{id}/estado/{estado}/modificar', [
+      'controller' => $controlador,
+      'action'     => 'movimientoModificarEstado',
+    ]);
+    $this->addPost('/movimiento/guardar', [
+      'controller' => $controlador,
+      'action'     => 'movimientoGuardar',
     ]);
     #endregion
   }

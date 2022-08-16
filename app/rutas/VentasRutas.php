@@ -27,7 +27,7 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventasDiario',
     ]);
-    $this->addPut('/comprobantes/{id}/modificar/estado/{estado}', [
+    $this->addPut('/comprobantes/{id}/estado/{estado}/modificar', [
       'controller' => $controlador,
       'action'     => 'ventaModificarEstado',
     ]);

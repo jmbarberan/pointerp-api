@@ -8,6 +8,7 @@ use Pointerp\Modelos\Nomina\Registros;
 use Pointerp\Modelos\Nomina\Cargos;
 use Pointerp\Modelos\Nomina\Empleados;
 use Pointerp\Modelos\Nomina\EmpleadosCuentas;
+use Pointerp\Modelos\Nomina\Movimientos;
 
 class NominaController extends ControllerBase {
   
@@ -355,16 +356,12 @@ class NominaController extends ControllerBase {
       'bind' => [ 'ced' => $ced, 'sub' => $sub, 'emp' => $emp ]
     ]);
     if ($rows->count() > 0) {
-      $ret->res = true;
-      $ret->cid = $rows[0]->id;
-      $ret->data = $rows[0];
-      $ret->msj = "Empleado registrado";
       $this->response->setStatusCode(200, 'Ok');
     }  else {
       $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($ret));
+    $this->response->setContent(json_encode($rows));
     $this->response->send();
   }
 
@@ -516,4 +513,184 @@ class NominaController extends ControllerBase {
   }
   #endregion
 
+  #region Movimientos
+  public function movimientosBuscarAction() {
+    $this->view->disable();
+    $sub = $this->dispatcher->getParam('sub');
+    $emp = $this->dispatcher->getParam('emp');
+    $tipoBusca = $this->dispatcher->getParam('tipo');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $estado = $this->dispatcher->getParam('estado');
+    $clase = $this->dispatcher->getParam('clase');
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta');
+    $condicion = "empresa_id = " . $emp . " and subscripcion_id = " . $sub;
+    $res = [];
+    if ($clase < 2) {
+      $condicion .= " AND fecha >= '" . $desde . "' AND fecha <= '" . $hasta . "'";      
+    } else {
+      if (strlen($filtro) > 0) {
+        if ($clase == 2) {
+          $filtro = str_replace('%20', ' ', $filtro);
+          if ($tipoBusca == 0) {
+            // Comenzando por
+            $filtro .= '%';
+          } else {
+            // Conteniendo
+            $filtroSP = str_replace('  ', ' ',trim($filtro));
+            $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+          }
+          $condicion .= " AND descripcion like '" . $filtro . "'";
+        } else {
+          $condicion .= ' AND numero = ' . $filtro;
+        }
+      }
+    }
+    if (strlen($condicion) > 0) {
+      $condicion .= ' AND ';
+      $condicion .= 'estado = 0';
+      $res = Movimientos::find([
+        'conditions' => $condicion,
+        'order' => 'fecha'
+      ]);
+    }
+
+    if ($res->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function movimientoGuardarAction() {
+    try {
+      $datos = $this->request->getJsonRawBody();
+      $ret = (object) [
+        'res' => false,
+        'cid' => -1,
+        'msj' => 'Los datos no se pudieron procesar'
+      ];
+      $this->response->setStatusCode(406, 'Not Acceptable');
+      $datos->fecha = str_replace('T', ' ', $datos->fecha);
+      $datos->fecha = str_replace('Z', '', $datos->fecha);
+      if ($datos->id > 0) {
+        // Traer movimiento por id y acualizar
+        $mov = Movimientos::findFirstById($datos->id);
+        $mov->fecha = $datos->fecha;
+        $mov->empleado_id = $datos->empleado_id;
+        $mov->descripcion = $datos->descripcion;
+        $mov->origen = $datos->origen;
+        $mov->valor = $datos->valor;
+        $mov->cuotas_numero = $datos->cuotas_numero;
+        $mov->cuotas_ejecutadas = $datos->cuotas_ejecutadas;
+        $mov->cuotas_inicio = $datos->cuotas_inicio;
+        $mov->referencia = $datos->referencia;        
+        $mov->estado = $datos->estado;
+        if($mov->update()) {
+          $ret->res = true;
+          $ret->cid = $mov;
+          $ret->msj = "Se actualizo correctamente los datos del registro";
+          $this->response->setStatusCode(200, 'Ok');
+        } else {
+          $msj = "No se puede actualizar los datos: " . "\n";
+          foreach ($mov->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = -1;
+          $ret->msj = $msj;
+        }
+      } else {
+        // Crear movimiento nuevo
+        $num = $this->ultimoNumeroMovimiento($datos->tipo, $datos->subscripcion_id, $datos->empresa_id);
+        $mov = new Movimientos();
+        $mov->numero = $num + 1;
+        $mov->subscripcion_id = $datos->subscripcion_id;
+        $mov->empresa_id = $datos->empresa_id;
+        $mov->tipo = $datos->tipo;
+        $mov->fecha = $datos->fecha;
+        $mov->empleado_id = $datos->empleado_id;
+        $mov->descripcion = $datos->descripcion;
+        $mov->origen = $datos->origen;
+        $mov->valor = $datos->valor;
+        $mov->cuotas_numero = $datos->cuotas_numero;
+        $mov->cuotas_ejecutadas = $datos->cuotas_ejecutadas;
+        $mov->cuotas_inicio = $datos->cuotas_inicio;
+        $mov->referencia = $datos->referencia;        
+        $mov->estado = $datos->estado;
+        if ($mov->create()) {
+          $ret->res = true;
+          $ret->cid = $mov;
+          $ret->msj = "Se registro correctamente el nuevo movimiento";  
+          $this->response->setStatusCode(201, 'Created');
+        } else {
+          $msj = "No se pudo crear el nuevo registro: " . "\n";
+          foreach ($mov->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $e) {
+      $this->response->setStatusCode(500, 'Error');
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $e->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  private function ultimoNumeroMovimiento($tipo, $sub, $emp) {
+    return Movimientos::maximum([
+      'column' => 'numero',
+      'conditions' => 'subscripcion_id = ' . $sub . ' AND empresa_id = ' . $emp
+    ]) ?? 0;
+  }
+
+  public function movimientoPorIdAction() {
+    $id = $this->dispatcher->getParam('id');
+    $res = Movimientos::findFirstById($id);
+    if ($res != false) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $res = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function movimientoModificarEstadoAction() {
+    $id = $this->dispatcher->getParam('id');
+    $est = $this->dispatcher->getParam('estado');
+    $mov = Movimientos::findFirstById($id);
+    if ($mov != false) {
+      $mov->estado = $est;
+      if($mov->update()) {
+        $msj = "La operacion se ejecuto exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($mov->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+  #endregion
 }

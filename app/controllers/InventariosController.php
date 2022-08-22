@@ -42,11 +42,26 @@ class InventariosController extends ControllerBase  {
     $tipoBusca = $this->dispatcher->getParam('tipo');
     $estado = $this->dispatcher->getParam('estado');
     $filtro = $this->dispatcher->getParam('filtro');
-    $empresa = $this->dispatcher->getParam('emp');
+    $emp = $this->dispatcher->getParam('emp');
     $atrib = $this->dispatcher->getParam('atrib');
     $filtro = str_replace('%20', ' ', $filtro);
     $filtro = str_replace('%C3%91' , 'Ñ',$filtro);
     $filtro = str_replace('%C3%B1' , 'ñ',$filtro);
+
+    if ($this->subscripcion['exclusive'] === 1) {
+      $condicion = $this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $emp . ' AND ';
+    } else {
+      $emps = SubscripcionesEmpresas::find([
+        'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
+      ]);
+      $condicion = '';
+      foreach ($emps as $e) {
+        $condicion .= strlen($condicion) > 0 ? ', ' . $e->empresa_id : $e->empresa_id;
+      }
+      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $emp);
+      $condicion .= ' AND ';
+    }
+
     if ($atrib == 0) {
       if ($tipoBusca == 0) {
         $filtro .= '%';
@@ -61,7 +76,7 @@ class InventariosController extends ControllerBase  {
       $campo = "Codigo = '" . $filtro . "'";
     };
 
-    $condicion = "EmpresaId = " . $empresa . " AND " . $campo;
+    $condicion .= $campo;
     if ($estado == 0) {
         $condicion .= ' AND Estado = 0';
     }
@@ -86,21 +101,35 @@ class InventariosController extends ControllerBase  {
     $filtro = $this->dispatcher->getParam('filtro');
     $empresa = $this->dispatcher->getParam('emp');
     $buscaExt = $this->dispatcher->getParam('extendida');
+    $condicion = '';
+    if ($this->subscripcion['exclusive'] === 1) {
+      $condicion = $this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $emp . ' AND ';
+    } else {
+      $emps = SubscripcionesEmpresas::find([
+        'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
+      ]);
+      $condicion = '';
+      foreach ($emps as $e) {
+        $condicion .= strlen($condicion) > 0 ? ', ' . $e->empresa_id : $e->empresa_id;
+      }
+      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $emp);
+      $condicion .= ' AND ';
+    }
 
     $res = null;
     if (strpos($filtro, '%20') === false) {
       $campo = "Codigo = '" . $filtro . "'";
-      $condicion = "EmpresaId = " . $empresa . " AND " . $campo;
+      $condicionc = $condicion . $campo;
       if ($eliminados == 0) {
-          $condicion .= ' AND Estado = 0';
+          $condicionc .= ' AND Estado = 0';
       }
       $res = Productos::find([
-        'conditions' => $condicion,
+        'conditions' => $condicionc,
         'order' => 'Nombre'
       ]);
     }
     
-    if ($res === null || $res->count() <= 0) {
+    if ($res->count() <= 0 || $res === null) {
       $filtro = str_replace('%20', ' ', $filtro);
       $filtro = str_replace('%C3%91' , 'Ñ',$filtro);
       $filtro = str_replace('%C3%B1' , 'ñ',$filtro);
@@ -110,8 +139,7 @@ class InventariosController extends ControllerBase  {
         $filtroSP = str_replace('  ', ' ',trim($filtro));
         $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
       }
-      $campo = "Nombre like '" . $filtro . "'";
-      $condicion = "EmpresaId = " . $empresa . " AND " . $campo;
+      $condicion .= "Nombre like '" . $filtro . "'";
       if ($eliminados == 0) {
           $condicion .= ' AND Estado = 0';
       }
@@ -124,7 +152,7 @@ class InventariosController extends ControllerBase  {
     if ($res->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
-      $this->response->setStatusCode(404, 'Not found');
+      $this->response->setStatusCode(404, 'Not found => ' . $res->count());
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));

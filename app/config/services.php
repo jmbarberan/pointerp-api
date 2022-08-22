@@ -81,7 +81,7 @@ $di->setShared('db', function () {
         ]
     );
     $con = $connection->fetchAll(
-        "SELECT id, dbhost, dbname, dbuser, dbpass, dbport, dbdriver " .
+        "SELECT id, dbhost, dbname, dbuser, dbpass, dbport, dbdriver, sharedemps, dbexclusive " .
         "FROM subscripciones.subscripciones " . 
         "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
     );
@@ -95,6 +95,10 @@ $di->setShared('db', function () {
             //'charset'  => $config->database->charset,
             'port'     => $con['dbport'],
         ];
+        $config = $this->getConfig();
+        $config->entorno->sharedemps    = $con['sharedemps'];
+        $config->entorno->exclusive     = $con['dbexclusive'];
+        $config->entorno->subscripcion  = $con['id'];
     } else {
         $params = [
             'host'     => $config->dbfallback->host,
@@ -124,10 +128,6 @@ $di->setShared('dbSubscripciones', function () {
         'port'     => $config->dbsubscripciones->port,
     ];
 
-    /*if ($config->database->adapter == 'Mysql') {
-        unset($params['charset']);
-    }*/
-
     return new $class($params);
 });
 
@@ -143,7 +143,7 @@ $di->setShared('dbNomina', function () {
         ]
     );
     $con = $connection->fetchAll(
-        "SELECT id, ndbhost, ndbname, ndbuser, ndbpass, ndbport, ndbdriver " .
+        "SELECT id, ndbhost, ndbname, ndbuser, ndbpass, ndbport, ndbdriver, sharedemps, dbexclusive " .
         "FROM subscripciones.subscripciones " . 
         "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
     );
@@ -154,16 +154,18 @@ $di->setShared('dbNomina', function () {
             'username' => $con['ndbuser'],
             'password' => $con['ndbpass'],
             'dbname'   => $con['ndbname'],
-            //'charset'  => $config->database->charset,
             'port'     => $con['ndbport'],
         ];
+        $config = $this->getConfig();
+        $config->entorno->sharedemps    = $con['sharedemps'];
+        $config->entorno->exclusive     = $con['dbexclusive'];
+        $config->entorno->subscripcion  = $con['id'];
     } else {
         $params = [
             'host'     => $config->ndbfallback->host,
             'username' => $config->ndbfallback->user,
             'password' => $config->ndbfallback->pass,
             'dbname'   => $config->ndbfallback->name,
-            //'charset'  => $config->database->charset,
             'port'     => $config->ndbfallback->port,
         ];
     }
@@ -216,4 +218,34 @@ $di->setShared('session', function () {
     $session->start();
 
     return $session;
+});
+
+$di->setShared('subscripcion', function () {
+    $req = new Request();
+    $connection = new PgConnection(
+        [
+            "host"     => getenv('DBS_HOST'),
+            "username" => getenv('DBS_USER'),
+            "password" => getenv('DBS_PASS'),
+            "dbname"   => getenv('DBS_NAME'),
+            "port"     => getenv('DBS_PORT'),
+        ]
+    );
+    $con = $connection->fetchAll(
+        "SELECT id, sharedemps, dbexclusive " .
+        "FROM subscripciones.subscripciones " . 
+        "Where clave = '" . trim(base64_decode($req->getHeaders()['Authorization'])) . "'"
+    );
+    $entorno = [
+        'sharedemps'=> 0,
+        'exclusive' => 0,
+        'id'        => 0,
+    ];
+    if (count($con) > 0) {
+        $con = reset($con);
+        $entorno['sharedemps']  = $con['sharedemps'];
+        $entorno['exclusive']   = $con['dbexclusive'];
+        $entorno['id']          = $con['id'];
+    }
+    return $entorno;
 });

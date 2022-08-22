@@ -118,8 +118,8 @@ $lineas = array(
 
 
 foreach ($lineas as $d) {
-$i++;
-$numerolinea = $i;
+	$i++;
+	$numerolinea = $i;
 
 	$detalle = $xml->createElement('detalle');
 	$detalle = $detalles->appendChild($detalle);
@@ -154,8 +154,6 @@ $numerolinea = $i;
 	$cbc = $impuesto->appendChild($cbc);
 }
 
-
-
 $xml->formatOutput = true;
 $strings_xml       = $xml->saveXML();
 
@@ -164,4 +162,4 @@ chmod($rucem.'74902020320953.xml', 0777);
 echo '<span style="color: #015B01; font-size: 15pt;">XML de Factura creada:</span>&nbsp;';
 echo '<span style="color: #B21919; font-size: 15pt;">'.$rucem.'74902020320953.xml</span><br>';
 echo '<hr width="100%"></div>';
-    echo '<a href="https://incared.net/producto/firmar-xml/" target="blank">Firmar XML</a>';
+echo '<a href="https://incared.net/producto/firmar-xml/" target="blank">Firmar XML</a>';

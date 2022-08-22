@@ -5,7 +5,8 @@ namespace Pointerp\Controladores;
 
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
-use Pointerp\Modelos\Claves;
+use Pointerp\Modelos\Registros;
+use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Maestros\Proveedores;
 
@@ -13,8 +14,7 @@ class MaestrosController extends ControllerBase  {
   
   #region Clientes
   public function clientesPorCedulaAction() {
-    // buscar por codigo si no encuentra la cedula
-    $ced = $this->dispatcher->getParam('ced');
+    $ced = $this->dispatcher->getParam('ced');    
     $rows = Clientes::find([
       'conditions' => 'Identificacion = :ced:',
       'bind' => [ 'ced' => $ced ]
@@ -47,7 +47,23 @@ class MaestrosController extends ControllerBase  {
     // eñes
     $filtroSP = str_replace('%C3%91' , 'Ñ',$filtroSP);
     $filtroSP = str_replace('%C3%B1' , 'ñ',$filtroSP);
-    $condicion = 'EmpresaId = :emp: AND ';
+    $config = Di::getDefault()->getConfig();
+    $condicion = '';  
+    $ex = $this->subscripcion['id'];
+    if ($this->subscripcion['exclusive'] === 1) {
+      $condicion .= ($this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $emp . ' AND ');
+    } else {
+      $emps = SubscripcionesEmpresas::find([
+        'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
+      ]);
+      $condicion = '';
+      foreach ($emps as $e) {
+        $condicion .= strlen($condicion) > 0 ? ', ' . $e->empresa_id : $e->empresa_id;
+      }
+      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $emp);
+      $condicion .= ' AND ';
+    }
+    
     if ($atrib != 'Nombres') {
       $condicion .= $atrib . ' = :fil:';
     } else {
@@ -60,10 +76,10 @@ class MaestrosController extends ControllerBase  {
     }
     $rows = Clientes::find([
       'conditions' => $condicion,
-      'bind' => [ 'fil' => $filtro, 'emp' => $emp ]
+      'bind' => [ 'fil' => $filtro ]
     ]);
     if ($rows->count() > 0) {
-      $this->response->setStatusCode(200, 'Ok');
+      $this->response->setStatusCode(200, 'Ok => ' . $ex);
     } else {
       $this->response->setStatusCode(404, 'Not found');
     }
@@ -75,14 +91,29 @@ class MaestrosController extends ControllerBase  {
   public function clientesPorNombresEstadoAction() {
     $estado = $this->dispatcher->getParam('estado');
     $filtro = $this->dispatcher->getParam('filtro');
+    $emp = $this->dispatcher->getParam('emp');
     $filtroSP = str_replace('%20', ' ', $filtro);
     $filtroSP = str_replace('  ', ' ',trim($filtroSP));
     // eñes
     $filtroSP = str_replace('%C3%91' , 'Ñ',$filtroSP);
     $filtroSP = str_replace('%C3%B1' , 'ñ',$filtroSP);
-    $filtro = str_replace(' ' , '%',$filtroSP) . '%';
-    
-    $condicion = 'UPPER(Nombres) like UPPER(:fil:)';
+    $filtro = str_replace(' ' , '%', $filtroSP) . '%';
+    $cve = new Clientes();
+    if ($this->subscripcion['exclusive'] === 1) {
+      $condicion = $this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $emp . ' AND ';
+    } else {
+      $emps = SubscripcionesEmpresas::find([
+        'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
+      ]);
+      $condicion = '';
+      foreach ($emps as $e) {
+        $condicion .= strlen($condicion) > 0 ? ', ' . $e->empresa_id : $e->empresa_id;
+      }
+      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $emp);
+      $condicion .= ' AND ';
+    }
+
+    $condicion .= 'UPPER(Nombres) like UPPER(:fil:)';
     if ($estado == 0) {
         $condicion .= ' AND Estado = 0';
     }

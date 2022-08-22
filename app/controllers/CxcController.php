@@ -5,6 +5,7 @@ namespace Pointerp\Controladores;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Ventas\VentasMin;
+use Pointerp\Modelos\Cxc\Transacciones;
 
 class CxcController extends ControllerBase {
   
@@ -21,11 +22,12 @@ class CxcController extends ControllerBase {
       'conditions' => $condicion,
       'order' => 'ClienteId'
     ]);
+
     $condiciondb = "Tipo = 15 AND SucursalId = " . $suc . " AND Estado = 0";
     if ($cli > 0) {
       $condiciondb .= " AND ClienteId = " . $cli;
     }
-    $notasdb = VentasMin::find([
+    $notasdb = Transacciones::find([
       'conditions' => $condiciondb,
       'order' => 'ClienteId'
     ]);
@@ -40,7 +42,7 @@ class CxcController extends ControllerBase {
         'Fecha' => $v->Fecha,
         'ClienteId' => $v->ClienteId,
         'relCliente' => $v->relCliente,
-        'Total' => $v->Subtotal + $v->SubtotalEx,
+        'Total' => $v->Subtotal + $v->SubtotalEx + $v->Recargo + $v->Impuestos,
         'Cobros' => $v->Abonos
       ];
       $idx++;
@@ -57,7 +59,7 @@ class CxcController extends ControllerBase {
         'ClienteId' => $nd->ClienteId,
         'relCliente' => $nd->relCliente,
         'Total' => $nd->Valor,
-        'Cobros' => $nd->Abonos
+        'Cobros' => is_null($nd->Abonos) ? 0 : $nd->Abonos
       ];
       $idx++;
       array_push($res, $ndb);

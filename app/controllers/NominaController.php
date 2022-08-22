@@ -6,6 +6,7 @@ use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Nomina\Registros;
 use Pointerp\Modelos\Nomina\Cargos;
+use Pointerp\Modelos\Nomina\Rubros;
 use Pointerp\Modelos\Nomina\Empleados;
 use Pointerp\Modelos\Nomina\EmpleadosCuentas;
 use Pointerp\Modelos\Nomina\Movimientos;
@@ -189,6 +190,135 @@ class NominaController extends ControllerBase {
         } else {
           $msj = "No se pudo crear el nuevo registro: " . "\n";
           foreach ($carn->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = -1;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $e) {
+      $ret->res = false;
+      $ret->cid = -1;
+      $ret->msj = $e->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+  #endregion
+
+  #region Rubros
+  public function rubrosPorEstadoAction() {
+    $est = $this->dispatcher->getParam('estado');
+    $sub = $this->dispatcher->getParam('sub');
+    $emp = $this->dispatcher->getParam('emp');
+    $condiciones = "subscripcion_id = " . $sub . " AND empresa_id = " . $emp;
+    if ($est == 0) {
+      $condiciones .= " AND estado = " . $est;
+    }
+    $res = Rubros::find([
+      'conditions' => $condiciones,
+      'order' => 'denominacion'
+    ]);
+    if (count($res) > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function rubroModificarEstadoAction() {
+    $id = $this->dispatcher->getParam('id');
+    $est = $this->dispatcher->getParam('estado');
+    $res = Rubros::findFirstById($id);
+    if ($res != null) {
+      $res->estado = $est;
+      if($res->update()) {
+        $msj = "Registro procesado exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar el registro: " . "\n";
+        foreach ($res->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
+  public function rubroGuardarAction() {
+    try {
+      $datos = $this->request->getJsonRawBody();
+      $ret = (object) [
+        'res' => false,
+        'cid' => -1,
+        'msj' => 'Los datos no se pudieron procesar'
+      ];
+      $this->response->setStatusCode(406, 'Not Acceptable');
+      if ($datos->id > 0) {
+        $rub = Rubros::findFirstById($datos->id);
+        $rub->subscripcion_id = $datos->subscripcion_id;
+        $rub->empresa_id = $datos->empresa_id;
+        $rub->denominacion = $datos->denominacion;
+        $rub->origen = $datos->origen;
+        $rub->periodo = $datos->periodo;	
+        $rub->fecha = $datos->fecha;	
+        $rub->formula = $datos->formula;	
+        $rub->valor = $datos->valor;	
+        $rub->base_indice = $datos->base_indice;	
+        $rub->base_valor = $datos->base_valor;	
+        $rub->referencia = $datos->referencia;	
+        $rub->divisible = $datos->divisible;	
+        $rub->meses_aplica = $datos->meses_aplica;
+        $rub->estado = $datos->estado;
+        if($rub->update()) {
+          $ret->res = true;
+          $this->response->setStatusCode(200, 'Ok');
+          $ret->cid = 0;
+          $ret->msj = "Se actualizo exitosamente los datos del registro";
+        } else {
+          $msj = "Los datos no se puedieron actualizar:" . "\n";
+          foreach ($rub->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = -1;
+          $ret->msj = $msj;
+        }
+      } else {
+        $rubn = new Rubros();
+        $rubn->subscripcion_id = $datos->subscripcion_id;
+        $rubn->empresa_id = $datos->empresa_id;
+        $rubn->denominacion = $datos->denominacion;
+        $rubn->origen = $datos->origen;
+        $rubn->periodo = $datos->periodo;	
+        $rubn->fecha = $datos->fecha;	
+        $rubn->formula = $datos->formula;
+        $rubn->valor = $datos->valor;	
+        $rubn->base_indice = $datos->base_indice;	
+        $rubn->base_valor = $datos->base_valor;	
+        $rubn->referencia = $datos->referencia;	
+        $rubn->divisible = $datos->divisible;	
+        $rubn->meses_aplica = $datos->meses_aplica;
+        $rubn->estado = $datos->estado;
+        if ($rubn->create()) {
+          $ret->res = true;
+          $ret->cid = 0;
+          $ret->msj = "Se guardó exitosamente el nuevo registro";
+          $this->response->setStatusCode(201, 'Created');
+        } else {
+          $msj = "No se pudo crear el nuevo registro: " . "\n";
+          foreach ($rubn->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->res = false;

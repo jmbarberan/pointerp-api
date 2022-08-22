@@ -1,8 +1,9 @@
 <?php
 
-namespace Pointerp\Modelos;
+namespace Pointerp\Modelos\Cxc;
 
 use Phalcon\Mvc\Model;
+use Pointerp\Modelos\Modelo;
 use Pointerp\Modelos\Maestros\Clientes;
 
 class Transacciones extends Modelo {

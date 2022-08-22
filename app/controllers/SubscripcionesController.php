@@ -240,8 +240,7 @@ class SubscripcionesController extends ControllerBase  {
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($ret));
     $this->response->send();
-  }
-
+  }  
   // codigoExistente 
   // enviarReseteo
   // actualizarCodigo

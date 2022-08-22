@@ -43,6 +43,7 @@ try {
      * Handle the request
      */
     $application = new \Phalcon\Mvc\Application($di);
+
     date_default_timezone_set('America/Guayaquil');
     echo $application->handle($_SERVER['REQUEST_URI'])->getContent();
 } catch (\Exception $e) {

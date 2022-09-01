@@ -48,6 +48,21 @@ class NominaRutas extends \Phalcon\Mvc\Router\Group
     ]);
     #endregion
 
+    #region Rubros
+    $this->addGet('/rubros/sub/{sub}/emp/{emp}/estado/{estado}', [
+      'controller' => $controlador,
+      'action'     => 'rubrosPorEstado',
+    ]);
+    $this->addPatch('/rubros/{id}/estado/{estado}/modificar', [
+      'controller' => $controlador,
+      'action'     => 'rubroModificarEstado',
+    ]);
+    $this->addPost('/rubros/guardar', [
+      'controller' => $controlador,
+      'action'     => 'rubroGuardar',
+    ]);
+    #endregion
+
     #region Empleados
     $this->addGet('/empleados/sub/{sub}/emp/{emp}/tipo/{tipo}/estado/{estado}/atributo/{atrib}/filtro/{filtro}/buscar', [
       'controller' => $controlador,
@@ -95,6 +110,29 @@ class NominaRutas extends \Phalcon\Mvc\Router\Group
     $this->addPost('/movimiento/guardar', [
       'controller' => $controlador,
       'action'     => 'movimientoGuardar',
+    ]);
+    #endregion
+
+    #region Roles
+    $this->addGet('/roles/sub/{sub}/emp/{emp}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipo/{tipo}/filtro/{filtro}/buscar', [
+      'controller' => $controlador,
+      'action'     => 'rolesBuscar',
+    ]);
+    $this->addGet('/roles/sub/{sub}/emp/{emp}/mes/{mes}/anio/{anio}/rubros', [
+      'controller' => $controlador,
+      'action'     => 'rubrosPeriodo',
+    ]);
+    $this->addPatch('/roles/{id}/estado/{estado}/modificar', [
+      'controller' => $controlador,
+      'action'     => 'rolesModificarEstado',
+    ]);
+    $this->addPatch('/roles/{id}/liquidar', [
+      'controller' => $controlador,
+      'action'     => 'rolesLiquidar',
+    ]);
+    $this->addPost('/roles/guardar', [
+      'controller' => $controlador,
+      'action'     => 'rolesGuardar',
     ]);
     #endregion
   }

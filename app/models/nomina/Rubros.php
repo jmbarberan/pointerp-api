@@ -15,7 +15,7 @@ class Rubros extends Modelo
         $this->hasOne('origen', Registros::class, 'id', [
           'reusable' => true, // cache
           'alias'    => 'relOrigen',
-        ]);
+        ]); 
 
         $this->hasOne('periodo', Registros::class, 'id', [
           'reusable' => true, // cache

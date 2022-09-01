@@ -10,6 +10,10 @@ use Pointerp\Modelos\Nomina\Rubros;
 use Pointerp\Modelos\Nomina\Empleados;
 use Pointerp\Modelos\Nomina\EmpleadosCuentas;
 use Pointerp\Modelos\Nomina\Movimientos;
+use Pointerp\Modelos\Nomina\Roles;
+use Pointerp\Modelos\Nomina\RolesEmpleados;
+use Pointerp\Modelos\Nomina\RolesRubros;
+use Pointerp\Modelos\Nomina\Liquidaciones;
 
 class NominaController extends ControllerBase {
   
@@ -262,6 +266,7 @@ class NominaController extends ControllerBase {
       $ret = (object) [
         'res' => false,
         'cid' => -1,
+        'obj' => null,
         'msj' => 'Los datos no se pudieron procesar'
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
@@ -284,7 +289,7 @@ class NominaController extends ControllerBase {
         if($rub->update()) {
           $ret->res = true;
           $this->response->setStatusCode(200, 'Ok');
-          $ret->cid = 0;
+          $ret->cid = $rub->id;
           $ret->msj = "Se actualizo exitosamente los datos del registro";
         } else {
           $msj = "Los datos no se puedieron actualizar:" . "\n";
@@ -313,7 +318,8 @@ class NominaController extends ControllerBase {
         $rubn->estado = $datos->estado;
         if ($rubn->create()) {
           $ret->res = true;
-          $ret->cid = 0;
+          $ret->cid = $rubn->id;
+          $ret->obj = $rubn;
           $ret->msj = "Se guardó exitosamente el nuevo registro";
           $this->response->setStatusCode(201, 'Created');
         } else {
@@ -385,9 +391,9 @@ class NominaController extends ControllerBase {
       'order' => 'nombres'
     ]);
     if ($rows->count() > 0) {
-      $this->response->setStatusCode(200, 'Ok ' . $filtro);
+      $this->response->setStatusCode(200, 'Ok');
     } else {
-      $this->response->setStatusCode(404, 'Not found ' . $filtro);
+      $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json');
     $this->response->setContent(json_encode($rows));
@@ -445,7 +451,7 @@ class NominaController extends ControllerBase {
     $emp = $this->dispatcher->getParam('emp');
     $nom = str_replace('%20', ' ', $nom);
     $nom = str_replace('  ', ' ', $nom);
-    $condicion = "id != :id: AND subscripcion_id = :sub: AND empresa_id = :emp:";
+    $condicion = "estado != 2 AND id != :id: AND subscripcion_id = :sub: AND empresa_id = :emp:";
     $params = [ 'id' => $id, 'sub' => $sub, 'emp' => $emp ];
     if (strlen($ced) >= 10) {
       $condicion .= ' AND (cedula = :ced: OR nombres = :nom:)';
@@ -522,6 +528,7 @@ class NominaController extends ControllerBase {
         $emp->ministerio_fecha = $datos->ministerio_fecha;
         $emp->departamento_id = $datos->departamento_id;
         $emp->referencia = $datos->referencia;
+        $emp->sueldo_seguro = $datos->sueldo_seguro;
         $emp->estado = $datos->estado;
         if($emp->update()) {
           $ret->res = true;
@@ -579,7 +586,8 @@ class NominaController extends ControllerBase {
         $empn->ministerio_fecha = $datos->ministerio_fecha;
         $empn->departamento_id = $datos->departamento_id;
         $empn->referencia = $datos->referencia;
-        $empn->estado = $datos->estado;   
+        $empn->estado = $datos->estado;
+        $empn->sueldo_seguro = $datos->sueldo_seguro;
         if ($empn->create()) {          
           $ret->res = true;
           $comp = "parcialmente";
@@ -688,7 +696,7 @@ class NominaController extends ControllerBase {
     if ($res->count() > 0) {
         $this->response->setStatusCode(200, 'Ok');
     } else {
-        $this->response->setStatusCode(404, 'Not found');
+        $this->response->setStatusCode(404, 'No se encontraron registros para esta busqueda');
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
@@ -820,6 +828,432 @@ class NominaController extends ControllerBase {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+  #endregion
+
+  #region Roles de pago
+  public function rolesBuscarAction() {
+    $this->view->disable();
+    $sub = $this->dispatcher->getParam('sub');
+    $emp = $this->dispatcher->getParam('emp');
+    $tipoBusca = $this->dispatcher->getParam('tipo');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $estado = $this->dispatcher->getParam('estado');
+    $clase = $this->dispatcher->getParam('clase');
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta');
+    $condicion = "empresa_id = " . $emp . " and subscripcion_id = " . $sub;
+    $res = [];
+    if ($clase < 2) {
+      $condicion .= " AND fecha >= '" . $desde . "' AND fecha <= '" . $hasta . "'";
+    } else {
+      if (strlen($filtro) > 0) {
+        if ($clase == 2) {
+          $filtro = str_replace('%20', ' ', $filtro);
+          if ($tipoBusca == 0) {
+            // Comenzando por
+            $filtro .= '%';
+          } else {
+            // Conteniendo
+            $filtroSP = str_replace('  ', ' ',trim($filtro));
+            $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+          }
+          $condicion .= " AND descripcion like '" . $filtro . "'";
+        } else {
+          $condicion .= ' AND mes = ' . $filtro; // BUSCAMOS POR MES EN LUGAR DE NUMERO
+        }
+      }
+    }
+    if (strlen($condicion) > 0) {
+      $condicion .= ' AND ';
+      $condicion .= 'estado != 2';
+      $res = Roles::find([
+        'conditions' => $condicion,
+        'order' => 'fecha'
+      ]);
+    }
+
+    if ($res->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'No se encontraron registros para esta busqueda');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function rolesGuardarAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => -1,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    $this->response->setStatusCode(406, 'Not Acceptable');
+    $datos->fecha = str_replace('T', ' ', $datos->fecha);
+    $datos->fecha = str_replace('Z', '', $datos->fecha);
+    if ($datos->id > 0) {
+      $rol = Roles::findFirstById($datos->id);
+      $rol->fecha = $datos->fecha;
+      $rol->anio = $datos->anio;
+      $rol->mes	= $datos->mes;
+      $rol->desde	= $datos->desde;
+      $rol->hasta	= $datos->hasta;
+      $rol->cuenta = $datos->cuenta;
+      $rol->referencia = $datos->referencia;
+      $rol->fecha	= $datos->fecha;
+      $rol->contabilizar = $datos->contabilizar;
+      $rol->pagado = $datos->pagado;
+      $rol->descripcion = $datos->descripcion;
+      $rol->estado = $datos->estado;
+      if($rol->update()) {
+        $phqle = 'DELETE FROM Pointerp\Modelos\Nomina\RolesEmpleados 
+              WHERE rol_id = ' . $datos->id;
+        $qrye = new Query($phqle, Di::getDefault());
+        $qrye->execute();
+        $phqlr = 'DELETE FROM Pointerp\Modelos\Nomina\RolesRubros 
+              WHERE rol_id = ' . $datos->id;
+        $qryr = new Query($phqlr, Di::getDefault());
+        $qryr->execute();
+        foreach ($datos->relEmpleados as $re) {
+          $ins = new RolesEmpleados();
+          $ins->rol_id = $rol->id;
+          $ins->empleado_id = $re->empleado_id;
+          $ins->remuneracion = $re->remuneracion;
+          $ins->referencia = $re->referencia;
+          $ins->ingresos = $re->ingresos;
+          $ins->egresos = $re->egresos;
+          $ins->indice = $re->indice;
+          $ins->create();
+        }
+        foreach ($datos->relRubros as $rb) {
+          $ins = new RolesRubros();
+          $ins->rol_id = $rol->id;
+          $ins->tipo = $rb->tipo;
+          $ins->origen = $rb->origen;
+          $ins->referencia = $rb->referencia;
+          $ins->descripcion = $rb->descripcion;
+          $ins->valor = $rb->valor;
+          $ins->orden = $rb->orden;
+          $ins->denominacion = $rb->denominacion;
+          $ins->empleado_id = $rb->empleado_id;
+          $ins->ingreso = $rb->ingreso;
+          $ins->egreso = $rb->egreso;
+          $ins->create();
+        }
+        $ret->res = true;
+        $ret->cid = $rol->id;
+        $ret->msj = "Se actualizo correctamente los datos del registro";
+        $this->response->setStatusCode(200, $ret->msj);
+      } else {
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($rol->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+        $ret->res = false;
+        $ret->cid = -1;
+        $ret->msj = $msj;
+      }
+    } else {
+      $rol = new Roles();
+      $rol->fecha = $datos->fecha;
+      $rol->subscripcion_id	= $datos->subscripcion_id;
+      $rol->empresa_id = $datos->empresa_id;
+      $rol->anio = $datos->anio;
+      $rol->mes	= $datos->mes;
+      $rol->desde	= $datos->desde;
+      $rol->hasta	= $datos->hasta;
+      $rol->cuenta = $datos->cuenta;
+      $rol->referencia = $datos->referencia;
+      $rol->fecha	= $datos->fecha;
+      $rol->contabilizar = $datos->contabilizar;
+      $rol->pagado = $datos->pagado;
+      $rol->descripcion = $datos->descripcion;
+      $rol->estado = $datos->estado;
+      if ($rol->create()) {
+        foreach ($datos->relEmpleados as $re) {
+          $ins = new RolesEmpleados();
+          $ins->rol_id = $rol->id;
+          $ins->empleado_id = $re->empleado_id;
+          $ins->remuneracion = $re->remuneracion;
+          $ins->referencia = $re->referencia;
+          $ins->ingresos = $re->ingresos;
+          $ins->egresos = $re->egresos;
+          $ins->indice = $re->indice;
+          $ins->create();
+        }
+        foreach ($datos->relRubros as $rb) {
+          $ins = new RolesRubros();
+          $ins->rol_id = $rol->id;
+          $ins->tipo = $rb->tipo;
+          $ins->origen = $rb->origen;
+          $ins->referencia = $rb->referencia;
+          $ins->descripcion = $rb->descripcion;
+          $ins->valor = $rb->valor;
+          $ins->orden = $rb->orden;
+          $ins->denominacion = $rb->denominacion;
+          $ins->empleado_id = $rb->empleado_id;
+          $ins->ingreso = $rb->ingreso;
+          $ins->egreso = $rb->egreso;
+          $ins->create();
+        }
+        $ret->res = true;
+        $ret->cid = $rol->id;
+        $ret->msj = "Se registro correctamente el nuevo rol";  
+        $this->response->setStatusCode(201, $ret->msj);
+      } else {
+        $msj = "No se pudo crear el nuevo registro: " . "\n";
+        foreach ($rol->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+        $ret->res = false;
+        $ret->cid = 0;
+        $ret->msj = $msj;
+      }
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function rolesLiquidarAction() {
+    $id = $this->dispatcher->getParam('id');
+    $rol = RolesMin::findFirstById($id);
+    $ret = (object) [
+      'res' => false,
+      'cid' => -1,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    $this->response->setStatusCode(406, 'Datos invalidos');
+    if ($rol->id > 0) {
+      $movs = RolesRubros::find([
+        'conditions' => 'rol_id = ' . $id . " AND origen = 3"
+      ]);
+      foreach ($movs as $m) {
+        $movMod = Movimientos::findFirstById($m->referencia);
+        $est = 1;
+        if ($m->cuotas_numero > 1) {
+          $m->cuotas_ejecutadas += 1;
+          if ($m->cuotas_numero > $m->cuotas_ejecutadas) {
+            $est = 0;
+          }
+        }
+        $movMod->estado = $est;
+        $movMod->update();
+      }
+
+      $rol->estado = 1;
+      if($rol->update()) {
+        $ret->res = true;
+        $ret->cid = $id;
+        $ret->msj = "Se completó exitosamente la liquidacion del rol";
+        $this->response->setStatusCode(200, 'Ok');
+      }
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function rolesModificarEstadoAction() {
+    $id = $this->dispatcher->getParam('id');
+    $est = $this->dispatcher->getParam('estado');
+    $mov = Roles::findFirstById($id);
+    if ($mov != false) {
+      $mov->estado = $est;
+      if($mov->update()) {
+        $msj = "La operacion se ejecuto exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($mov->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
+  public function rubrosPeriodoAction() {
+    $todosLosMeses = 0;
+    $mesEspecifico = 1;
+    $valorFraccion = 0;
+    $bsueldo = 1;
+    $bseguro = 2;
+
+    $emp = $this->dispatcher->getParam('emp');
+    $sub = $this->dispatcher->getParam('sub');
+    $año = $this->dispatcher->getParam('anio');
+    $mes = $this->dispatcher->getParam('mes');
+
+    $smesDesde = $mes < 10 ? "0" . strval($mes) : strval($mes);
+    $desde = date('Y-m-d', strtotime(strval($año) . "-" . $smesDesde . "-01"));
+    $d = new \DateTime($desde); 
+    $hasta = $d->format('Y-m-t');
+    $retorno = "...";
+    $rubros = [];
+    $empleados = [];
+
+    // traer RBU
+    $rbus = Registros::find([
+      'conditions' => "subscripcion_id = " . $sub . " AND tabla_id = 1",
+      'order' => 'empresa_id'
+    ]);
+    $rbu = $rbus->count() > 0 ? $rbus[0]->valor : 0;
+
+    // traer empleados
+    $emps = Empleados::find([
+      'conditions' => 'empresa_id = :emp: AND subscripcion_id = :sub: AND estado = 0',
+      'bind' => [ 'emp' => $emp, 'sub' => $sub ],
+      'order' => 'nombres'
+    ]);
+    if ($emps->count() > 0) {
+      // sueldos
+      foreach ($emps as $e) {
+        $rsueldo = (object) [
+          'id' => 0,
+          'rol_id' => 0,
+          'tipo'	=> 0,
+          'origen'	=> 1,
+          'referencia'	=> 0,
+          'descripcion'	=> 'SUELDO',
+          'valor'	=> 0,
+          'orden'	=> 0,
+          'denominacion' => 'SUELDO',
+          'empleado_id'	=> $e->id,
+          'ingreso'	=> $e->sueldo,
+          'egreso' => 0
+        ];
+        $rolemp = (object) [
+          'id' => 0,
+          'rol_id'	=> 0,
+          'empleado_id'	=> $e->id,
+          'remuneracion' => $e->sueldo,
+          'referencia' => 0,
+          'ingresos' => 0,
+          'egresos' => 0,
+          'indice' => 0,
+          'relEmpleado' => $e
+        ];
+        array_push($rubros, $rsueldo);
+        array_push($empleados, $rolemp);
+      }
+    }
+
+    // otros rubros
+    $condicionrub = "empresa_id = " . $emp . " AND subscripcion_id = " . $sub;
+    $condicionrub .= " AND estado = 0";
+    $rubs = Rubros::find([
+      'conditions' => $condicionrub
+    ]);
+    foreach ($rubs as $r) {
+      $agregar = $r->relPeriodo->valor == $todosLosMeses || 
+        ($r->relPeriodo->valor == $mesEspecifico && $r->referencia == $mes);      
+      if ($agregar) {
+        foreach ($emps as $er) {
+          $val = $r->valor;
+          if ($r->relFormula->valor == $valorFraccion) {
+            $base = $r->base_indice == $bsueldo ? $er->sueldo : ($r->base_indice == $bseguro ? $er->sueldo_seguro : $rbu);
+            if ($base > 0 && $val > 0) {
+              $val = (doubleval($base) * doubleval($val)) / 100;
+            } else {
+              $val = 0;
+            }
+            if ($r->divisible == 1 && $r->relPeriodo->valor == $mesEspecifico) {
+              // calcular dias completados
+              if ($er->entrada_fecha == null) {
+                $val = 0;
+              } else {
+                $fechaAtras = date('Y-m-d', strtotime('-' . $r->base_valor . ' days', strtotime($hasta)));                
+                if ($er->entrada_fecha > $fechaAtras) {
+                  $fh = new \DateTime($hasta);
+                  $dif = $fh->diff(new \DateTime($er->entrada_fecha));
+                  if ($dif->days) {
+                    $fraccion = $dif->days / doubleval($r->base_valor);
+                    $retorno = $fraccion;
+                    $val = $val * $fraccion;
+                  }
+                }
+              }
+            }
+          }
+          if ($val > 0) {
+            $ing = $r->relOrigen->valor > 0 ? $val : 0;
+            $egr = $r->relOrigen->valor < 0 ? $val : 0;
+            $ins = (object) [
+              'id' => 0,
+              'rol_id' => 0,
+              'tipo'	=> 0,
+              'origen'	=> 2,
+              'referencia'	=> $r->id,
+              'descripcion'	=> 'RUBROS PREDEFINIDOS',
+              'valor'	=> 0,
+              'orden'	=> 0,
+              'denominacion' => $r->denominacion,
+              'empleado_id'	=> $er->id,
+              'ingreso'	=> $ing,
+              'egreso' => $egr
+            ];
+            array_push($rubros, $ins);
+          }
+        }        
+      }
+    }
+
+    // movimientos
+    $condicionmov = "empresa_id = " . $emp . " and subscripcion_id = " . $sub;
+    $condicionmov .= " AND estado = 0";
+    $movs = Movimientos::find([
+      'conditions' => $condicionmov,
+      'order' => 'fecha'
+    ]);
+    foreach ($movs as $mov) {
+      $val = $mov->valor;
+      $cuotaNo = "";
+      if ($mov->cuotas_inicio != null && $mov->cuotas_inicio <= $hasta) {
+        if ($mov->cuotas_numero > 1) {
+          $val = $val / $mov->cuotas_numero;
+          $cuotaNo = " (" . strval($mov->cuotas_ejecutadas + 1) . "/" . strval($mov->cuotas_numero) . ")";
+        }
+      }
+      $ing = $mov->relOrigen->valor > 0 ? $val : 0;
+      $egr = $mov->relOrigen->valor < 0 ? $val : 0;
+      $rmov = (object) [
+        'id' => 0,
+        'rol_id' => 0,
+        'tipo'	=> 0,
+        'origen'	=> 3,
+        'referencia'	=> $mov->id,
+        'descripcion'	=> $mov->descripcion,
+        'valor'	=> 0,
+        'orden'	=> 0,
+        'denominacion' => 'TRNS. #' . strval($mov->numero) . " (" . $mov->descripcion . $cuotaNo . ")",
+        'empleado_id'	=> $mov->empleado_id,
+        'ingreso'	=> $ing,
+        'egreso' => $egr
+      ];
+      array_push($rubros, $rmov);
+    }
+
+    $res = (object) [
+      'empleados' => $empleados,
+      'rubros' => $rubros,
+    ];
+    if ($rubs->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok ' . json_encode($retorno));
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
     $this->response->send();
   }
   #endregion

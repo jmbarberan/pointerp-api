@@ -157,6 +157,7 @@ class SeguridadController extends ControllerBase
         $rus = 'El usuario y/o contraseña no son validos';
         if ($rws->count() === 1) {
             $rus = $rws->getFirst();
+            $rus->Clave = '';
             $this->response->setStatusCode(202, 'Accepted');
         }
         $this->response->setContentType('application/json', 'UTF-8');

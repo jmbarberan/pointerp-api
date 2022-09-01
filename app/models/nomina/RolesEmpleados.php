@@ -18,9 +18,10 @@ class RolesEmpleados extends Modelo {
   }
 
   public function jsonSerialize () : array {
-    return $this->asUnicodeArray(["descripcion"]);
+    $res = $this->toArray();
     if ($this->relEmpleado != null) {
       $res['relEmpleado'] = $this->relEmpleado->asUnicodeArray(["nombres", "direccion", "cargo"]);
     }
+    return res;
   }
 }

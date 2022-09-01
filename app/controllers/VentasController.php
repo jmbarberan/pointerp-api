@@ -73,8 +73,8 @@ class VentasController extends ControllerBase  {
     $desde = $this->dispatcher->getParam('desde');
     $hasta = $this->dispatcher->getParam('hasta');
     $res = [];
-    $desde .= " 0:00:00";
-    $hasta .= " 23:59:59";
+    /*$desde .= " 0:00:00";
+    $hasta .= " 23:59:59";*/
     $condicion = "Tipo in (11, 12) AND SucursalId = " . $suc . " AND Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
     if ($estado == 0) {
       $condicion .= " AND Estado = " . $estado;
@@ -99,7 +99,7 @@ class VentasController extends ControllerBase  {
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
-        'vta' => null,
+        'ven' => null,
         'msj' => 'Los datos no se pudieron procesar'
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
@@ -251,6 +251,8 @@ class VentasController extends ControllerBase  {
         $ven->CERespuestaId = $datos->CERespuestaId;
         $ven->CERespuestaTipo = $datos->CERespuestaTipo;
         $ven->CERespuestaMsj = $datos->CERespuestaMsj;
+        $ven->Comprobante = $datos->Comprobante;
+        $ven->Contado = $datos->Contado;
         $ven->Operador = $datos->Operador;
         if ($ven->create()) {
           $ret->res = true;

@@ -11,7 +11,6 @@ echo '<span style="color: #000099; font-size: 15pt;">Crear archivo .XML SIN FIRM
 echo '<hr width="100%"></div>';
 
 
-
 $xml = new DomDocument('1.0', 'UTF-8');
 //		$xml->standalone         = false;
 		$xml->preserveWhiteSpace = false;
@@ -45,6 +44,8 @@ $xml = new DomDocument('1.0', 'UTF-8');
 	$cbc = $infoTributaria->appendChild($cbc);
 	$cbc = $xml->createElement('dirMatriz', 'direccion matris');
 	$cbc = $infoTributaria->appendChild($cbc);
+	$cbc = $xml->createElement('regimenMicroempresas', 'CONTRIBUYENTE RÉGIMEN MICROEMPRESAS');
+	$cbc = $infoTributaria->appendChild($cbc);
 
 // INFORMACIOO DE FACTURA.
 	$infoFactura = $xml->createElement('infoFactura');
@@ -77,9 +78,9 @@ $xml = new DomDocument('1.0', 'UTF-8');
 	$cbc = $totalImpuesto->appendChild($cbc);
 	$cbc = $xml->createElement('codigoPorcentaje', '001');
 	$cbc = $totalImpuesto->appendChild($cbc);
-	$cbc = $xml->createElement('descuentoAdicional', '001');
-	$cbc = $totalImpuesto->appendChild($cbc);
 	$cbc = $xml->createElement('baseImponible', '001');
+	$cbc = $totalImpuesto->appendChild($cbc);
+	$cbc = $xml->createElement('tarifa', '12');
 	$cbc = $totalImpuesto->appendChild($cbc);
 	$cbc = $xml->createElement('valor', '001');
 	$cbc = $totalImpuesto->appendChild($cbc);
@@ -91,10 +92,20 @@ $xml = new DomDocument('1.0', 'UTF-8');
 	$cbc = $xml->createElement('moneda', 'DOLAR');
 	$cbc = $infoFactura->appendChild($cbc);
 
+	$pagos = $xml->createElement('pagos');
+	$pagos = $infoFactura->appendChild($pagos);
+	$pago = $xml->createElement('pago');
+	$pago = $pagos->appendChild($pago);
+	$cbc = $xml->createElement('formaPago', '01');
+	$cbc = $pago->appendChild($cbc);
+	$cbc = $xml->createElement('total', '16.80');
+	$cbc = $pago->appendChild($cbc);
+	
+
 //DETALLES DE LA FACTURA.
 	$detalles = $xml->createElement('detalles');
 	$detalles = $Factura->appendChild($detalles);
-
+	
 $descripcion = '';
 $i = 0;
 
@@ -125,8 +136,8 @@ foreach ($lineas as $d) {
 	$detalle = $detalles->appendChild($detalle);
 	$cbc = $xml->createElement('codigoPrincipal', '1');
 	$cbc = $detalle->appendChild($cbc);
-	$cbc = $xml->createElement('codigoAuxiliar', '1');
-	$cbc = $detalle->appendChild($cbc);
+	/*$cbc = $xml->createElement('codigoAuxiliar', '1');
+	$cbc = $detalle->appendChild($cbc);*/
 	$cbc = $xml->createElement('descripcion', $d["descripcion"].' / '.$numerolinea );
 	$cbc = $detalle->appendChild($cbc);
 	$cbc = $xml->createElement('cantidad', $d["cantidad"]);

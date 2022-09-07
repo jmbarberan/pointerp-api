@@ -15,7 +15,8 @@
       "ext-curl": "*",
       "ext-gettext": "*",
       "phalcon/cphalcon": "^3.4",
-      "ext-phalcon": "*"
+      "ext-phalcon": "*",
+        "selective/xmldsig": "^2.2"
     },
     "require-dev": {
         "phalcon/ide-stubs": "^4.1"

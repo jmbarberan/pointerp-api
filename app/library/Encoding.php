@@ -150,8 +150,10 @@ class Encoding {
        "\xc5\xb8"     => "\x9f"
     );
 
-  static function toUTF8($text){
-  /**
+  
+    static function toUTF8($text){
+  
+      /**
    * Function \ForceUTF8\Encoding::toUTF8
    *
    * This function leaves UTF8 characters alone, while converting almost all non-UTF8 to UTF8.

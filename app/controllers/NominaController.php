@@ -11,6 +11,7 @@ use Pointerp\Modelos\Nomina\Empleados;
 use Pointerp\Modelos\Nomina\EmpleadosCuentas;
 use Pointerp\Modelos\Nomina\Movimientos;
 use Pointerp\Modelos\Nomina\Roles;
+use Pointerp\Modelos\Nomina\RolesMin;
 use Pointerp\Modelos\Nomina\RolesEmpleados;
 use Pointerp\Modelos\Nomina\RolesRubros;
 use Pointerp\Modelos\Nomina\Liquidaciones;
@@ -686,7 +687,7 @@ class NominaController extends ControllerBase {
     }
     if (strlen($condicion) > 0) {
       $condicion .= ' AND ';
-      $condicion .= 'estado = 0';
+      $condicion .= 'estado != 2';
       $res = Movimientos::find([
         'conditions' => $condicion,
         'order' => 'fecha'
@@ -1034,14 +1035,27 @@ class NominaController extends ControllerBase {
       foreach ($movs as $m) {
         $movMod = Movimientos::findFirstById($m->referencia);
         $est = 1;
-        if ($m->cuotas_numero > 1) {
-          $m->cuotas_ejecutadas += 1;
-          if ($m->cuotas_numero > $m->cuotas_ejecutadas) {
+        if ($movMod->cuotas_numero > 1) {
+          $movMod->cuotas_ejecutadas += 1;
+          if ($movMod->cuotas_numero > $movMod->cuotas_ejecutadas) {
             $est = 0;
           }
         }
         $movMod->estado = $est;
         $movMod->update();
+      }
+
+      $phql = 'SELECT SUM(ingreso) as ings, SUM(egreso) as egrs FROM Pointerp\Modelos\Nomina\RolesRubros 
+        WHERE rol_id = ' . $id;
+      $qry = new Query($phql, Di::getDefault());
+      $rws = $qry->execute();
+      if ($rws->count() === 1) {
+        $sumas = $rws->getFirst();
+        try {
+          $ings = doubleval($sumas['ings']);
+          $egrs = doubleval($sumas['egrs']);
+          $rol->pagado = $ings - $egrs;
+        } catch(Exception $ex) {}
       }
 
       $rol->estado = 1;
@@ -1210,7 +1224,7 @@ class NominaController extends ControllerBase {
 
     // movimientos
     $condicionmov = "empresa_id = " . $emp . " and subscripcion_id = " . $sub;
-    $condicionmov .= " AND estado = 0";
+    $condicionmov .= " AND tipo = 0 AND estado = 0";
     $movs = Movimientos::find([
       'conditions' => $condicionmov,
       'order' => 'fecha'
@@ -1256,5 +1270,9 @@ class NominaController extends ControllerBase {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
+  #endregion
+
+  #region liquidaciones
+
   #endregion
 }

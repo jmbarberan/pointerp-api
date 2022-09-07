@@ -103,7 +103,7 @@ class InventariosController extends ControllerBase  {
     $buscaExt = $this->dispatcher->getParam('extendida');
     $condicion = '';
     if ($this->subscripcion['exclusive'] === 1) {
-      $condicion = $this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $emp . ' AND ';
+      $condicion = $this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $empresa . ' AND ';
     } else {
       $emps = SubscripcionesEmpresas::find([
         'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
@@ -112,7 +112,7 @@ class InventariosController extends ControllerBase  {
       foreach ($emps as $e) {
         $condicion .= strlen($condicion) > 0 ? ', ' . $e->empresa_id : $e->empresa_id;
       }
-      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $emp);
+      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $empresa);
       $condicion .= ' AND ';
     }
 
@@ -210,10 +210,10 @@ class InventariosController extends ControllerBase  {
         'cid' => $datos->Id,
         'msj' => 'Los datos no se pudieron procesar'
       ];
-      $nom = $datos->Nombre;
+      /*$nom = $datos->Nombre;
       if (substr($nom, 0, 4 ) === "@1_7") {
         $nom = str_replace('@1_7', 'UNIO', $nom);
-      }
+      }*/
       if ($datos->Id > 0) {
         // Traer medico por id para actualizar
         $prd = Productos::findFirstById($datos->Id);

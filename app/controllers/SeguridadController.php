@@ -549,7 +549,7 @@ class SeguridadController extends ControllerBase
         $txt = $data->code;
         $this->response->setStatusCode(200, 'Ok');
         $this->response->setContentType('application/json', 'UTF-8');
-        //$this->response->setContent(json_encode('code:' . md5($txt)));
+        //$this->response->setContent(json_encode('code:' . base64_decode($txt)));
         $this->response->setContent(json_encode('code:' . base64_encode($txt)));
         $this->response->send();
     }

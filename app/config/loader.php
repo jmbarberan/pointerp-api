@@ -23,7 +23,7 @@ $names = [
     'Pointerp\Modelos\Nomina'       => '../app/models/nomina',
     'Pointerp\Modelos\Cxc'          => '../app/models/cxc',
     'Pointerp\Rutas'                => '../app/rutas/',
-    'Pointerp\Library'              => '../app/library/',
+    'Pointerp\Library'              => '../app/library/',    
 ];
 
 /**
@@ -31,5 +31,7 @@ $names = [
  */
 $loader->registerDirs($dirs);
 $loader->registerNamespaces($names, true);
-
+$loader->registerFiles([
+    APP_PATH . '/../../vendor/autoload.php'
+]);
 $loader->register();

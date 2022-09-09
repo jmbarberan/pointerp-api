@@ -1,31 +1,44 @@
 <?php
 
-use Selective\XmlDSig\DigestAlgorithmType;
-use Selective\XmlDSig\XmlSigner;
+include APP_PATH . '/library/esign.php';
+use sasco\LibreDTE\FirmaElectronica;
+
+/*include APP_PATH . '/library/Exception/XmlSignatureValidatorException.php';
+include APP_PATH . '/library/xmlsign/Utils/XPath.php';
+include APP_PATH . '/library/xmlsign/XmlSecEnc.php';
+include APP_PATH . '/library/xmlsign/XmlSecurityDSig.php';
+include APP_PATH . '/library/xmlsign/XmlSecurityKey.php';
+
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;*/
+
+/*use Selective\XmlDSig\DigestAlgorithmType;
+use Selective\XmlDSig\XmlSigner;*/
+
+//require $_SERVER['DOCUMENT_ROOT'] . '/vendor/robrichards/xmlseclibs/src/XMLSecurityDSig.php';
 
 class ComprobantesElectronicos {
+
+  static $db = null;
 
   static function calcularDigitoVerificadorCadena($cadena) {
     $cadenaInversa = strrev($cadena);    
     $factor = 2;
     $res = 0;
-    $conteo = 1;
-    for ($i = 0; i < strlen($cadenaInversa); $i++)
-    {
-      $factor = $factor == 8 ? 2 : $factor;
-      $producto = intval(substr($cadenaInversa, i, 1));
-      $producto *= $factor;
-      $conteo++;
-      $factor++;
-      $res += $producto;
+    if (strlen($cadenaInversa) > 0) {
+      for ($i = 0; $i < strlen($cadenaInversa); $i++)
+      {
+        $factor = $factor == 8 ? 2 : $factor;
+        $producto = intval(substr($cadenaInversa, $i, 1));
+        $producto *= $factor;
+        $factor++;
+        $res .=$producto;
+      }
+
+      $res = 11 - $res % 11;
+      $res = $res == 11 ? 0 : $res;
+      $res = $res == 10 ? 1 : $res;
     }
-
-    $res = 11 - $res % 11;
-    //if ($res == 11) $res = 0;
-    $res = $res == 11 ? 0 : $res;
-    //if ($res == 10) $res = 1;
-    $res = $res == 10 ? 1 : $res;
-
     return $res;
   }
 
@@ -39,27 +52,27 @@ class ComprobantesElectronicos {
     $d = $f->format("d");
     $calf = intval($y) * intval($m) * intval($d);
     $calh = intval($h) * intval($t) * intval($s);
-    $generado = rand(1, 100 + 1);
-    return strval($calf) . strval(calh) . strval(generado);
+    $generado = rand(1, 101);
+    return strval($calf) . strval($calh) . strval($generado);
   }
 
-  static function crearXml($comprobante, $tipoDatos, $contribuyente) {
+  static function crearXmlFactura($comprobante, $tipoDatos, $contribuyente) {
     $codigoDocumento = ""; // Aleatorio
     $formaPago = "01";
-    $empresaId = $contribuyente->EmpresaId;
+    $empresaId = $comprobante->relCliente->EmpresaId;
 
     #region Tipo identificacion
     $tipoIdent = "07";    
-    if ($comprobante->ClienteNav->IdentificacionTipo > 0)
+    if ($comprobante->relCliente->IdentificacionTipo > 0)
     {
-      $con = $db->fetchAll(
-        "SELECT id, codigo, denominacion " .
+      $con = self::$db->fetchAll(
+        "SELECT Id, Codigo, Denominacion " .
         "FROM registros " . 
-        "Where id = " . strval($comprobante->ClienteNav->IdentificacionTipo)
+        "Where id = " . strval($comprobante->relCliente->IdentificacionTipo)
       );
       if (count($con) > 0) {
         $con = reset($con);
-        $tipoIdent = $con->Codigo;
+        $tipoIdent = $con["Codigo"];
       }
     }
     #endregion    
@@ -86,38 +99,38 @@ class ComprobantesElectronicos {
     }
     if ($secuencial <= 0) {
       $ret = 1;
-      $conSec = $db->fetchAll(
-        "SELECT id, codigo, denominacion " .
+      $conSec = self::$db->fetchAll(
+        "SELECT Indice " .
         "FROM empresaparametros " . 
-        "Where Tipo = 1 AND Referencia = 11 AND Estado = 0 AND EmpresaId = " . strval($tipoDatos->empresa->id)
+        "Where Tipo = 1 AND Referencia = 11 AND Estado = 0 AND EmpresaId = " . strval($contribuyente->empresaId)
       );
       if (count($conSec) > 0) {
         $conSec = reset($conSec);
-        $ret = $conSec->Indice;
+        $ret = $conSec["Indice"];
       }
       $secuencial = $ret;
     }
     #endregion
 
     #region Clave de acceso
-    $tipoDocumento = $tipoDatos->tipoDocumento; // 01 = Factura, 04 = NOTA CREDITO, 05 = NOTA DEBITO, 06 = GUIA REMISION, 07 = RETENCION
-    $tipoEmision = $tipoDatos->tipoEmision; // Unico valor disponible en metodo OFFLINE
+    //$tipoDocumento = $tipoDatos->tipoDocumento; // 01 = Factura, 04 = NOTA CREDITO, 05 = NOTA DEBITO, 06 = GUIA REMISION, 07 = RETENCION
+    //$tipoEmision = $tipoDatos->tipoEmision; // Unico valor disponible en metodo OFFLINE
     $clave = "";
     if (!strlen($comprobante->CEClaveAcceso) > 0) {
-      if (!str_contains($comprobante->CEContenido, "ERROR EN LA ESTRUCTURA DE LA CLAVE DE ACCESO"))
+      if (strpos($comprobante->CEContenido, "ERROR EN LA ESTRUCTURA DE LA CLAVE DE ACCESO") !== false)
         $clave = $comprobante->CEClaveAcceso;
     }
     if (strlen($clave) <= 0) {
       $fecha = new \DateTime($comprobante->Fecha);
       $clave = $fecha->format("dmY") .
         $tipoDatos->tipoDocumento .
-        $tipoDatos->empresa->Ruc .
+        $contribuyente->ruc .
         $tipoDatos->ambiente .
         $serie .
         str_pad(strval($secuencial), 9, "0", STR_PAD_LEFT) .
-        str_pad(codigoAleatorio(), 8, "1", STR_PAD_LEFT) .
+        str_pad(self::codigoAleatorio(), 8, "1", STR_PAD_LEFT) .
         $tipoDatos->tipoEmision;
-      $clave .= strval(calcularDigitoVerificadorCadena($clave));
+      $clave .= strval(self::calcularDigitoVerificadorCadena($clave));
     }
     #endregion
 
@@ -144,25 +157,25 @@ class ComprobantesElectronicos {
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('claveAcceso', $clave);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('codDoc', $codDocumento);
+      $cbc = $xml->createElement('codDoc', $tipoDatos->tipoDocumento);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('estab', $contribuyente->establecimiento);
+      $cbc = $xml->createElement('estab', $comprobante->relSucursal->Descripcion);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('ptoEmi', $contribuyente->puntoEmision);
+      $cbc = $xml->createElement('ptoEmi', $comprobante->relSucursal->Codigo);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('secuencial', $secuncial);
+      $cbc = $xml->createElement('secuencial', $secuencial);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('dirMatriz', $contribuyente->direccion);
+      $cbc = $xml->createElement('dirMatriz', $comprobante->relSucursal->Direccion);
       $cbc = $infoTributaria->appendChild($cbc);
       /*$cbc = $xml->createElement('regimenMicroempresas', $contribuyente->regimen);
       $cbc = $infoTributaria->appendChild($cbc);*/
 
-    // INFORMACIOO DE FACTURA.
+    // INFORMACION DE FACTURA.
       $infoFactura = $xml->createElement('infoFactura');
       $infoFactura = $factura->appendChild($infoFactura);
-      $cbc = $xml->createElement('fechaEmision', $comprobante->fecha);
+      $cbc = $xml->createElement('fechaEmision', $comprobante->Fecha);
       $cbc = $infoFactura->appendChild($cbc);
-      $cbc = $xml->createElement('dirEstablecimiento', $contribuyente->direccion);
+      $cbc = $xml->createElement('dirEstablecimiento', $comprobante->relSucursal->Direccion);
       $cbc = $infoFactura->appendChild($cbc);
       $cbc = $xml->createElement('contribuyenteEspecial', $contribuyente->contribuyenteEspecial);
       $cbc = $infoFactura->appendChild($cbc);
@@ -216,7 +229,7 @@ class ComprobantesElectronicos {
 
       $cbc = $xml->createElement('propina', '0');
       $cbc = $infoFactura->appendChild($cbc);
-      $cbc = $xml->createElement('importeTotal', number_format($comprobante->Total, 2, ".", ""));
+      $cbc = $xml->createElement('importeTotal', number_format(doubleval($comprobante->Subtotal) + doubleval($comprobante->SubtotalEx) + doubleval($comprobante->Impuestos), 2, ".", ""));
       $cbc = $infoFactura->appendChild($cbc);
       $cbc = $xml->createElement('moneda', 'DOLAR');
       $cbc = $infoFactura->appendChild($cbc);
@@ -231,7 +244,7 @@ class ComprobantesElectronicos {
       $cbc = $pago->appendChild($cbc);
       $cbc = $xml->createElement('unidadTiempo', "DIAS");
       $cbc = $pago->appendChild($cbc);
-      $cbc = $xml->createElement('total', number_format($comprobante->Total, 2, ".", ""));
+      $cbc = $xml->createElement('total', number_format(doubleval($comprobante->Subtotal) + doubleval($comprobante->SubtotalEx) + doubleval($comprobante->Impuestos), 2, ".", ""));
       $cbc = $pago->appendChild($cbc);      
 
     
@@ -239,26 +252,27 @@ class ComprobantesElectronicos {
       $detalles = $xml->createElement('detalles');
       $detalles = $factura->appendChild($detalles);
 
-    foreach ($comprobante->itemsNav as $vi) {
+    foreach ($comprobante->relItems as $vi) {
       $numerolinea = 0;
 
+      $subtotal = doubleval($vi->Cantidad) * doubleval($vi->Precio);
       $detalle = $xml->createElement('detalle');
       $detalle = $detalles->appendChild($detalle);
-      $cbc = $xml->createElement('codigoPrincipal', number_format($vi->ProductoNav->Codigo, 2, ".", ""));
+      $cbc = $xml->createElement('codigoPrincipal', $vi->relProducto->Codigo);
       $cbc = $detalle->appendChild($cbc);
-      $cbc = $xml->createElement('descripcion', number_format($vi->ProductoNav->Nombre, 2, ".", ""));
+      $cbc = $xml->createElement('descripcion', $vi->relProducto->Nombre);
       $cbc = $detalle->appendChild($cbc);
       $cbc = $xml->createElement('cantidad', number_format($vi->Cantidad, 0, ".", ""));
       $cbc = $detalle->appendChild($cbc);
       $cbc = $xml->createElement('precioUnitario', number_format($vi->Precio, 2, ".", ""));
       $cbc = $detalle->appendChild($cbc);
-      $cbc = $xml->createElement('precioTotalSinImpuesto', number_format($vi->Subtotal, 2, ".", ""));
+      $cbc = $xml->createElement('precioTotalSinImpuesto', number_format($subtotal, 2, ".", ""));
       $cbc = $detalle->appendChild($cbc);
 
       $impuestos = $xml->createElement('impuestos');
       $impuestos = $detalle->appendChild($impuestos);
 
-      if (count($vi->ProductoNav->ImposicionesNav) == 0) {
+      if (count($vi->relProducto->relImposiciones) == 0) {
         // sin impuestos
         $impuesto = $xml->createElement('impuesto');
         $impuesto = $impuestos->appendChild($impuesto);
@@ -271,7 +285,7 @@ class ComprobantesElectronicos {
         $cbc = $xml->createElement('valor', '0');
         $cbc = $impuesto->appendChild($cbc);
       } else {
-        foreach($vi->ProductoNav->ImposicionesNav as $im) {
+        foreach($vi->relProducto->relImposiciones as $im) {
           $impuesto = $xml->createElement('impuesto');
           $impuesto = $impuestos->appendChild($impuesto);
           $cbc = $xml->createElement('codigo', '2');
@@ -280,31 +294,185 @@ class ComprobantesElectronicos {
           $cbc = $impuesto->appendChild($cbc);
           $cbc = $xml->createElement('tarifa', '12'); // TODO parametrizar del impuesto seleccionado
           $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('baseImponible', number_format($vi->Subtotal, 2, ".", ""));
+          $cbc = $xml->createElement('baseImponible', number_format($subtotal, 2, ".", ""));
           $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('valor', number_format((doubleval($vi->Subtotal) * 12) / 100), 2, ".", "");
+          $cbc = $xml->createElement('valor', number_format((($subtotal * 12) / 100), 2, ".", ""));
           $cbc = $impuesto->appendChild($cbc);
         }
       }
     }
 
     $xml->formatOutput = true;
-    $strings_xml       = $xml->saveXML();
-    return false;
+    $strings_xml = $xml->saveXML();
+    return $strings_xml;
   }
 
   static function firmarXml($xml, $pfx, $pass) {
+    $firma_config = [ 'file' => $pfx, 'pass' => $pass ];
+    $fe = new FirmaElectronica($firma_config);
+    return $fe->signXML($xml, $reference = '', $tag = null, $xmlns_xsi = false);
     //$rutapfx = __DIR__ . '/public/index.php'
-    $rutapfx = $_SERVER["DOCUMENT_ROOT"] .DIRECTORY_SEPARATOR.
-      'certs'.DIRECTORY_SEPARATOR. $pfx;
-    $xmlSigner = new XmlSigner();
-    $xmlSigner->loadPfxFile($rutapfx, $pass);
-    return $xmlSigner->signXml($xml, 'sha1');
+    /*$rutapfx = $_SERVER["DOCUMENT_ROOT"] .DIRECTORY_SEPARATOR.
+      'certs'.DIRECTORY_SEPARATOR. $pfx;*/
+      //use XmlSigner;    
+    /*$signer = new XmlSigner();
+    $signer->loadPfxFile($pfx, $pin);
+    return $signer->signXml($xml, 'sha1');*/
+    //return $objSec;
+
+
+    /*$doc = new DOMDocument();
+    //$doc->load(dirname(__FILE__) . '/basic-doc.xml');
+    $doc->loadXML($xml);
+
+    $objDSig = new XMLSecurityDSig();
+    $objDSig->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
+    $objDSig->addReference($doc, XMLSecurityDSig::SHA1, array('http://www.w3.org/2000/09/xmldsig#enveloped-signature'), array('force_uri' => true));
+    $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, array('type'=>'private'));
+    // load private key 
+    $objKey->loadKey($cert, TRUE);
+    // if key has Passphrase, set it using $objKey->passphrase = <passphrase> " 
+    $objDSig->sign($objKey);
+    // Add associated public key 
+    $objDSig->add509Cert(file_get_contents($cert));
+    $objDSig->appendSignature($doc->documentElement);
+    return $doc->saveXML();*/
+  }
+
+  static function generarXades($xml, $params) {
+    $sha1_factura = base64_encode(str_replace('<?xml version="1.0" encoding="UTF-8"?>\n', '', $xml));
+    $xmlns = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
+    $Certificate_number = self::codigoAleatorio();
+    $Signature_number = self::codigoAleatorio();
+    $SignedProperties_number = self::codigoAleatorio();
+    //numeros fuera de los hash:
+    $SignedInfo_number = self::codigoAleatorio();
+    $SignedPropertiesID_number = self::codigoAleatorio();
+    $Reference_ID_number = self::codigoAleatorio();
+    $SignatureValue_number = self::codigoAleatorio();
+    $Object_number = self::codigoAleatorio();
+
+    $SignedProperties = '';
+    $SignedProperties .= '<etsi:SignedProperties Id="Signature' + $Signature_number + '-SignedProperties' + $SignedProperties_number + '">';  //SignedProperties
+        $SignedProperties .= '<etsi:SignedSignatureProperties>';
+            $SignedProperties .= '<etsi:SigningTime>';
+            $SignedProperties .= (new \DateTime())->format('Y-m-t H:i:s');
+            $SignedProperties .= '</etsi:SigningTime>';
+            $SignedProperties .= '<etsi:SigningCertificate>';
+                $SignedProperties .= '<etsi:Cert>';
+                    $SignedProperties .= '<etsi:CertDigest>';
+                        $SignedProperties .= '<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1">';
+                        $SignedProperties .= '</ds:DigestMethod>';
+                        $SignedProperties .= '<ds:DigestValue>';
+                            $SignedProperties .= $params->certificateX509_der_hash;
+                        $SignedProperties .= '</ds:DigestValue>';
+                    $SignedProperties .= '</etsi:CertDigest>';
+                    $SignedProperties .= '<etsi:IssuerSerial>';
+                        $SignedProperties .= '<ds:X509IssuerName>';
+                            $SignedProperties .= $params->issuerName;
+                        $SignedProperties .= '</ds:X509IssuerName>';
+                    $SignedProperties .= '<ds:X509SerialNumber>';
+                        $SignedProperties .= $params->X509SerialNumber;
+                    $SignedProperties .= '</ds:X509SerialNumber>';
+                    $SignedProperties .= '</etsi:IssuerSerial>';
+                $SignedProperties .= '</etsi:Cert>';
+            $SignedProperties .= '</etsi:SigningCertificate>';
+        $SignedProperties .= '</etsi:SignedSignatureProperties>';
+        $SignedProperties .= '<etsi:SignedDataObjectProperties>';
+            $SignedProperties .= '<etsi:DataObjectFormat ObjectReference="#Reference-ID-' + $Reference_ID_number + '">';
+                $SignedProperties .= '<etsi:Description>';
+                    $SignedProperties .= 'contenido comprobante'; // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+                $SignedProperties .= '</etsi:Description>';
+                $SignedProperties .= '<etsi:MimeType>';
+                    $SignedProperties .= 'text/xml';
+                $SignedProperties .= '</etsi:MimeType>';
+            $SignedProperties .= '</etsi:DataObjectFormat>';
+        $SignedProperties .= '</etsi:SignedDataObjectProperties>';
+    $SignedProperties .= '</etsi:SignedProperties>';
+    $SignedProperties_para_hash = str_replace('<etsi:SignedProperties', '<etsi:SignedProperties ' + $xmlns, $SignedProperties);
+    $sha1_SignedProperties = base64_encode($SignedProperties_para_hash);
+    
+    $KeyInfo = '';        
+    $KeyInfo .= '<ds:KeyInfo Id="Certificate' + $Certificate_number + '">';
+        $KeyInfo .= '\n<ds:X509Data>';
+            $KeyInfo .= '\n<ds:X509Certificate>\n';
+                //CERTIFICADO X509 CODIFICADO EN Base64 
+                $KeyInfo .= $params->certificado;
+            $KeyInfo .= '\n</ds:X509Certificate>';
+        $KeyInfo .= '\n</ds:X509Data>';
+        $KeyInfo .= '\n<ds:KeyValue>';
+            $KeyInfo .= '\n<ds:RSAKeyValue>';
+                $KeyInfo .= '\n<ds:Modulus>\n';
+                    //MODULO DEL CERTIFICADO X509
+                    $KeyInfo .= $params->modulus;
+                $KeyInfo .= '\n</ds:Modulus>';
+                $KeyInfo .= '\n<ds:Exponent>';
+                    $KeyInfo .= $params->exponent;
+                $KeyInfo .= '</ds:Exponent>';
+            $KeyInfo .= '\n</ds:RSAKeyValue>';
+        $KeyInfo .= '\n</ds:KeyValue>';
+    $KeyInfo .= '\n</ds:KeyInfo>';    
+    $KeyInfo_para_hash = str_replace('<ds:KeyInfo', '<ds:KeyInfo ' + $xmlns, $KeyInfo);
+    $sha1_certificado = base64_encode($KeyInfxades_bes .= $KeyInfo_para_hash);
+
+    $SignedInfo = '';
+    $SignedInfo .= '<ds:SignedInfo Id="Signature-SignedInfo' . $SignedInfo_number . '">';
+        $SignedInfo .= '\n<ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315">';
+        $SignedInfo .= '</ds:CanonicalizationMethod>';
+        $SignedInfo .= '\n<ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1">';
+        $SignedInfo .= '</ds:SignatureMethod>';
+        $SignedInfo .= '\n<ds:Reference Id="SignedPropertiesID' + $SignedPropertiesID_number + '" Type="http://uri.etsi.org/01903#SignedProperties" URI="#Signature' + $Signature_number + '-SignedProperties' + $SignedProperties_number + '">';
+            $SignedInfo .= '\n<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1">';
+            $SignedInfo .= '</ds:DigestMethod>';
+            $SignedInfo .= '\n<ds:DigestValue>';
+                //HASH O DIGEST DEL ELEMENTO <etsi:SignedProperties>';
+                $SignedInfo += $sha1_SignedProperties;
+            $SignedInfo .= '</ds:DigestValue>';
+        $SignedInfo .= '\n</ds:Reference>';
+        $SignedInfo .= '\n<ds:Reference URI="#Certificate' + $Certificate_number + '">';
+            $SignedInfo .= '\n<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1">';
+            $SignedInfo .= '</ds:DigestMethod>';
+            $SignedInfo .= '\n<ds:DigestValue>';
+                //HASH O DIGEST DEL CERTIFICADO X509
+                $SignedInfo .= $sha1_certificado;
+            $SignedInfo .= '</ds:DigestValue>';
+        $SignedInfo .= '\n</ds:Reference>';
+        $SignedInfo .= '\n<ds:Reference Id="Reference-ID-' + $Reference_ID_number + '" URI="#comprobante">';
+            $SignedInfo .= '\n<ds:Transforms>';
+                $SignedInfo .= '\n<ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature">';
+                $SignedInfo .= '</ds:Transform>';
+            $SignedInfo .= '\n</ds:Transforms>';
+            $SignedInfo .= '\n<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1">';
+            $SignedInfo .= '</ds:DigestMethod>';
+            $SignedInfo .= '\n<ds:DigestValue>';
+                //HASH O DIGEST DE TODO EL XML IDENTIFICADO POR EL id="comprobante" 
+                $SignedInfo += $sha1_factura;
+            $SignedInfo .= '</ds:DigestValue>';
+        $SignedInfo .= '\n</ds:Reference>';
+    $SignedInfo .= '\n</ds:SignedInfo>';
+    
+    $SignedInfo_para_firma = str_replace('<ds:SignedInfo', '<ds:SignedInfo ' + $xmlns, $SignedInfo);
+  
+    $xades_bes = '';
+    $xades_bes .= '<ds:Signature ' . $xmlns . ' Id="Signature' . $Signature_number . '">';
+        $xades_bes .= '\n' + $SignedInfo;
+        $xades_bes .= '\n<ds:SignatureValue Id="SignatureValue' + $SignatureValue_number + '">\n';
+            //VALOR DE LA FIRMA (ENCRIPTADO CON LA LLAVE PRIVADA DEL CERTIFICADO DIGITAL) 
+            $xades_bes .= $params->firma_SignedInfo;
+        $xades_bes .= '\n</ds:SignatureValue>';
+        $xades_bes .= '\n' + $KeyInfo;
+        $xades_bes .= '\n<ds:Object Id="Signature' + $Signature_number + '-Object' + $Object_number + '">';
+            $xades_bes .= '<etsi:QualifyingProperties Target="#Signature' + $Signature_number + '">';
+                //ELEMENTO <etsi:SignedProperties>';
+                $xades_bes .= $SignedProperties;
+            $xades_bes .= '</etsi:QualifyingProperties>';
+        $xades_bes .= '</ds:Object>';
+    $xades_bes .= '</ds:Signature>';
   }
 
   public static function enviar($p) {
     $p->firmardo;
-    $url = $p->rutaPais;
+    $url = $p->url;
     try {
       $client = new SoapClient($url, [ "trace" => 1 ] );
       $result = $client->ResolveIP( [ "ipAddress" => $argv[1], "licenseKey" => "0" ] );
@@ -318,15 +486,60 @@ class ComprobantesElectronicos {
     return false;
   }
 
-  public static function procesarComprobante($comprobante, $rutapfx, $pass) {
-    $xml = crearXml($comprobante);
-    // Traer nombre del archivo pfx y contraseña de la db
-    $frm = firmarXml($xml, $rutapfx, $pass);
-    $ret = enviarEc($frm);
-    /**/
-    return procesar($ret);
+  public static function procesarFactura($comprobante, $pdb) {
+    self::$db = $pdb;
+    $emp = self::$db->fetchAll(
+      "SELECT Id, Ruc, RazonSocial, NombreComercial, CEResolucion, ObligadoContabilidad, CertificadoRuta, CertificadoClave, Soporte " .
+      "FROM empresas " . 
+      "Where Id = " . $comprobante->relCliente->EmpresaId
+    );
+    if (count($emp) > 0) {
+      $emp = reset($emp);
+    }
+    $tipoDatos = (object) [
+      'tipoDocumento' => '01', // 01: FACTURA
+      'tipoEmision' => '1',  // OFFLINE UNICO VALOR VALIDO
+      'ambiente' => '2' // 1: PRUEBAS; 2: PRODUCCION
+    ];    
+    $contribuyente = (object) [
+      'empresaId' => $comprobante->relCliente->EmpresaId,
+      'ruc' => $emp["Ruc"],
+      'razonSocial' => $emp["RazonSocial"],
+      'nombreComercial' => $emp["NombreComercial"],
+      'contribuyenteEspecial' => $emp["CEResolucion"] != null ? $emp["CEResolucion"] : "",
+      'obligadoContabilidad' => intval($emp["ObligadoContabilidad"]) == 1 ? 0 : 1
+    ];
+    $rutapfx = $emp["CertificadoRuta"];
+    $pass = $emp["CertificadoClave"];
+    if ($emp["Soporte"] == -1) {
+      $pass = base64_decode($pass);
+    }
+    
+    $xml = self::crearXmlFactura($comprobante, $tipoDatos, $contribuyente);
+    $cert = APP_PATH . '\files\sign\CERT_' . '0912639069001' . '.cer';
+    $pem  = APP_PATH . '\files\sign\KEY_' . '0912639069001' . '.pem';
+    $frm = self::firmarXml($xml, $rutapfx, $pass);
+    file_put_contents('fa_' . strval($comprobante->Numero) . '.xml', "\xEF\xBB\xBF".  $frm);
+    
+    return $frm;
+  }
+
+  public static function ExtraerCertificado($rutapfx, $pass, $code) {
+    $res = [];
+    $pfx = file_get_contents($rutapfx);
+    $openSSL = openssl_pkcs12_read($pfx, $res, $pass);
+    if(!$openSSL) {
+        throw new Exception("Error: " . openssl_error_string());
+    }
+    // this is the CER FILE
+    file_put_contents(APP_PATH . '\files\sign\CERT' . $code . '.cer', $res['pkey'].$res['cert'].implode('', $res['extracerts']));
+
+    // this is the PEM FILE
+    $cert = $res['cert'].implode('', $res['extracerts']);
+    file_put_contents(APP_PATH . '\files\sign\KEY' . $code . '.pem', $cert);
   }
 
 }
+
 
 ?>

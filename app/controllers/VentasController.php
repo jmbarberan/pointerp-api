@@ -360,6 +360,40 @@ class VentasController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function ventaAutorizarAction() {
+    $db = DI::getDefault()->getDb();
+    $id = $this->dispatcher->getParam('id');    
+    $ven = Ventas::findFirstById($id);
+    if ($ven != false) {
+      require_once APP_PATH . '/library/ComprobantesElectronicos.php';
+      //$ce = new \ComprobantesElectronicos();
+      try {
+        $msj = \ComprobantesElectronicos::procesarFactura($ven, $db);
+        //$msj = "Procesado correctamente";
+      } catch (Exception $e) {
+        $this->response->setStatusCode(500, 'Error');  
+        $msj = $e->getMessage();
+      }
+      /*$ven->estado = $est;
+      if($ven->update()) {
+        $msj = "La operacion se ejecuto exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($ven->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }*/
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
   #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {

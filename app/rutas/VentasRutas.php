@@ -31,6 +31,14 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaModificarEstado',
     ]);
+    $this->addPatch('/comprobantes/{id}/autorizar', [
+      'controller' => $controlador,
+      'action'     => 'ventaAutorizar',
+    ]);
+    $this->addPatch('/comprobantes/{id}/verificar', [
+      'controller' => $controlador,
+      'action'     => 'ventaVerificar',
+    ]);
     $this->addPost('/comprobantes/guardar', [
       'controller' => $controlador,
       'action'     => 'ventaGuardar',

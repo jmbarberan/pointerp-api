@@ -23,6 +23,9 @@
 
 namespace sasco\LibreDTE;
 
+include APP_PATH . '/library/XML.php';
+use sasco\LibreDTE\XML;
+
 /**
  * Clase para trabajar con firma electrónica, permite firmar y verificar firmas.
  * Provee los métodos: sign(), verify(), signXML() y verifyXML()
@@ -31,8 +34,10 @@ namespace sasco\LibreDTE;
  */
 class FirmaElectronica
 {
+
     const XMLDSIGNS = 'http://www.w3.org/2000/09/xmldsig#';
     const XMLETSI = 'http://uri.etsi.org/01903/v1.3.2#';
+    const XMLXSI = 'http://www.w3.org/2001/XMLSchema-instance';
     const SHA1 = 'http://www.w3.org/2000/09/xmldsig#sha1';
     const RSASHA1 = 'http://www.w3.org/2000/09/xmldsig#rsa-sha1';
     const SHA256 = 'http://www.w3.org/2001/04/xmlenc#sha256';
@@ -42,9 +47,6 @@ class FirmaElectronica
     const ENVELOPED = 'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
 
     const C14N = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315';
-    const C14N_COMMENTS = 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments';
-    const EXC_C14N = 'http://www.w3.org/2001/10/xml-exc-c14n#';
-    const EXC_C14N_COMMENTS = 'http://www.w3.org/2001/10/xml-exc-c14n#WithComments';
 
     private $config; ///< Configuración de la firma electrónica
     private $certs; ///< Certificados digitales de la firma
@@ -81,12 +83,11 @@ class FirmaElectronica
     {
         // crear configuración
         if (!$config) {
-            /*if (class_exists('\sowerphp\core\Configure')) {
+            if (class_exists('\sowerphp\core\Configure')) {
                 $config = (array)\sowerphp\core\Configure::read('firma_electronica.default');
             } else {
                 $config = [];
-            }*/
-            return $this->error('La configuracion es invalida');
+            }
         }
         $this->config = array_merge([
             'file' => null,
@@ -315,7 +316,6 @@ class FirmaElectronica
 
     public function getSerialNumber() {
         return $this->data['serialNumber'];
-        //return $this->data['issuer']['serialNumber'];
     }
 
     /**
@@ -437,18 +437,8 @@ class FirmaElectronica
      * @author Esteban De La Fuente Rubio, DeLaF (esteban[at]sasco.cl)
      * @version 2017-10-22
      */
-    public function signXML($xml, $reference = '', $tag = "etsi:SignedProperties", $xmlns_xsi = false)
+    public function signXML($xml, $reference = '', $tag = null, $xmlns_xsi = false)
     {
-        // normalizar 4to parámetro que puede ser boolean o array
-        if (is_array($xmlns_xsi)) {
-            $namespace = $xmlns_xsi;
-            $xmlns_xsi = false;
-        } else {
-            $namespace = null;
-        }
-
-        $sha1_comprobante = hash('sha1', str_replace('<?xml version="1.0" encoding="UTF-8"?>\n', '', $xml), true);
-        $sha1_comprobante = base64_encode($sha1_comprobante);
         $Certificate_number = $this->codigoAleatorio();
         $Signature_number = $this->codigoAleatorio();
         $SignedProperties_number = $this->codigoAleatorio();
@@ -458,193 +448,216 @@ class FirmaElectronica
         $Reference_ID_number = $this->codigoAleatorio();
         $SignatureValue_number = $this->codigoAleatorio();
         $Object_number = $this->codigoAleatorio();
-          
-        $signature = '0';
-        $digCertificado = base64_encode(hash('sha1', strval($this->getCertificate()), true));
 
-        $doc = new \DOMDocument();
-        $doc->preserveWhiteSpace = true;
-        $doc->formatOutput = false;
+        //$namespace = $xmlns_xsi;
+        // normalizar 4to parámetro que puede ser boolean o array
+        if (is_array($xmlns_xsi)) {
+            $namespace = $xmlns_xsi;
+            $xmlns_xsi = false;
+        } else {
+            $namespace = null;
+        }
+        // obtener objeto del XML que se va a firmar
+        $strComp = str_replace('<?xml version="1.0" encoding="UTF-8"?>\n', '', $xml);
+        $doc = new XML();
         $doc->loadXML($xml);
+        if (!$doc->documentElement) {
+            return $this->error('No se pudo obtener el documentElement desde el XML a firmar (posible XML mal formado)');
+        }
 
-        $fac = $doc->getElementsByTagName('factura')->item(0);
-        $sign = $doc->createElement('ds:Signature');
-        $sign = $fac->appendChild($sign);
-        $sign->setAttribute("xmlns:ds", self::XMLDSIGNS);
-        $sign->setAttribute("xmlns:etsi", self::XMLETSI);
-        $sign->setAttribute("Id", "Signature" . $Signature_number); // SIGNATURE + ID        
+        $docComp = new XML();
+        $docComp->loadXML($strComp);
+        // calcular DigestValue
+        $item = $docComp->C14N();
+        if ($tag) {
+            $element = $docComp->documentElement->getElementsByTagName($tag)->item(0);
+            if (!$element) {
+                return $this->error('No fue posible obtener el nodo con el tag '.$tag);
+            } else {
+                $item = $element->C14N();
+            }
+        }
+        $sha1_comprobante = base64_encode(sha1($item, true));
+        $digCertificado = base64_encode(sha1($this->getCertificate(true), true));
+        $digCertref = base64_encode(sha1($this->getCertificate(true), true));
 
-          $signedInfo = $doc->createElement('ds:SignedInfo');
-          $signedInfo = $sign->appendChild($signedInfo);
-          $signedInfo->setAttribute("xmlns:ds", self::XMLDSIGNS);
-          $signedInfo->setAttribute("xmlns:etsi", self::XMLETSI);
-          //xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"
-          
-          $signedValue = $doc->createElement('ds:SignatureValue', $signature);
-          $signedValue = $sign->appendChild($signedValue);
-          $signedValue->setAttribute("Id", "SignatureValue" . $SignatureValue_number);
+        // Nodo del proveedor
+        $proveedorTag = (new XML())->generate([
+            'etsi:QualifyingProperties' => [
+                '@attributes' => [
+                    'Target' => '#Signature' . $Signature_number,
+                ],
+                'etsi:SignedProperties' => [
+                    '@attributes' => [
+                        'Id' => 'Signature' . $Signature_number . '-' . 'SignedProperties' . $SignedProperties_number,
+                    ],
+                    'etsi:SignedSignatureProperties' => [
+                        'etsi:SigningTime' => (new \DateTime())->format('Y-m-tTH:i:s'),
+                        'etsi:SigningCertificate' => [
+                            'etsi:Cert' => [
+                                'etsi:CertDigest' => [
+                                    'ds:DigestMethod' => [
+                                        '@attributes' => [
+                                            'Algorithm' => self::SHA1,
+                                        ],
+                                    ],
+                                    'ds:DigestValue' =>  $digCertificado,
+                                ],
+                                'etsi:IssuerSerial' => [
+                                    'ds:X509IssuerName' => $this->getIssuer(),
+                                    'ds:X509SerialNumber' => $this->getSerialNumber(),
+                                ]
+                            ],
+                        ],
+                    ],
+                    'etsi:SignedDataObjectProperties' => [
+                        'etsi:DataObjectFormat' => [
+                            '@attributes' => [
+                                'ObjectReference' => '#Reference-ID-' . $Reference_ID_number,
+                            ],
+                            'etsi:Description' => 'contenido comprobante',
+                            'etsi:MimeType' => 'text/xml',
+                        ],
+                    ],
+                ],
+            ]
+        ])->documentElement;
 
-          $keyInfo = $doc->createElement('ds:KeyInfo');
-          $keyInfo = $sign->appendChild($keyInfo);
-          $keyInfo->setAttribute("Id", "Certificate" . $Certificate_number);
+        $certRefTag = (new XML())->generate([
+            'Reference' => [
+                '@attributes' => [
+                    'URI' => '#Certificate' . $Certificate_number,
+                ],
+                'DigestMethod' => [
+                    '@attributes' => [
+                        'Algorithm' => self::SHA1,
+                    ],
+                ],
+                'DigestValue' => $digCertificado,
+            ],
+        ], $namespace)->documentElement;
 
-            $kiX509Data = $doc->createElement('ds:X509Data');
-            $kiX509Data = $keyInfo->appendChild($kiX509Data);
+        $compRefTag = (new XML())->generate([
+            'ds:Reference' => [
+                '@attributes' => [
+                    'Id' => 'Reference-ID-' . $Reference_ID_number,
+                    'URI' => $reference,
+                ],
+                'ds:Transforms' => [
+                    'ds:Transform' => [
+                        '@attributes' => [
+                            'Algorithm' => 'http://www.w3.org/2000/09/xmldsig#enveloped-signature',
+                        ],
+                    ],
+                ],
+                'ds:DigestMethod' => [
+                    '@attributes' => [
+                        'ds:Algorithm' => 'http://www.w3.org/2000/09/xmldsig#sha1',
+                    ],
+                ],
+                'ds:DigestValue' => $sha1_comprobante,
+            ]
+        ])->documentElement;
 
-              $kiX509Certificate = $doc->createElement('ds:X509Certificate', $this->getCertificate(true));
-              $kiX509Certificate = $kiX509Data->appendChild($kiX509Certificate);
+        $dig = $proveedorTag->getElementsByTagName('etsi:SignedProperties')->item(0);
+        $digestProveedor = base64_encode(sha1($dig->nodeValue, true));
 
-            $kiKeyValue = $doc->createElement('ds:KeyValue');
-            $kiKeyValue = $keyInfo->appendChild($kiKeyValue);
-            
-              $kvRSAKeyValue = $doc->createElement('ds:RSAKeyValue');
-              $kvRSAKeyValue = $kiKeyValue->appendChild($kvRSAKeyValue);
+        $digProvTag = (new XML())->generate([
+            'ds:Reference' => [
+                '@attributes' => [
+                    'Id' => 'SignedPropertiesID' . $SignedPropertiesID_number,
+                    'Type' => 'http://uri.etsi.org/01903#SignedProperties',
+                    'URI' => '#Signature' . $Signature_number . '-' . 'SignedProperties' . $SignedProperties_number,
+                ],
+                'ds:DigestMethod' => [
+                    '@attributes' => [
+                        'Algorithm' => self::SHA1,
+                    ],
+                ],
+                'ds:DigestValue' => $digestProveedor,
+            ],
+        ])->documentElement;
 
-                $modulus = $doc->createElement('ds:Modulus', $this->getModulus());
-                $modulus = $kvRSAKeyValue->appendChild($modulus);
-
-                $exponent = $doc->createElement('ds:Exponent', $this->getExponent());
-                $exponent = $kvRSAKeyValue->appendChild($exponent);
-          
-          $object = $doc->createElement('ds:Object');
-          $object = $sign->appendChild($object);
-          $object->setAttribute("Id", "Signature" . $Signature_number . "-" . "Object" . $Object_number);
-          
-            $eQualiProps = $doc->createElement('etsi:QualifyingProperties');
-            $eQualiProps = $object->appendChild($eQualiProps);
-            $eQualiProps->setAttribute("Target", "#Signature" . $Signature_number);
-
-              $refSignedProps = $doc->createElement('etsi:SignedProperties');
-              $refSignedProps = $eQualiProps->appendChild($refSignedProps);
-              $refSignedProps->setAttribute("Id", "Signature" . $Signature_number . "-" . "SignedProperties" . $SignedProperties_number);
-
-                $refSignedSignProps = $doc->createElement('etsi:SignedSignatureProperties');
-                $refSignedSignProps = $refSignedProps->appendChild($refSignedSignProps);
-
-                  $SigningTime = $doc->createElement('etsi:SigningTime', (new \DateTime())->format('Y-m-t H:i:s'));
-                  $SigningTime = $refSignedSignProps->appendChild($SigningTime);
-
-                  $signingCert = $doc->createElement('etsi:SigningCertificate');
-                  $signingCert = $refSignedSignProps->appendChild($signingCert);
-
-                    $cert = $doc->createElement('etsi:Cert');
-                    $cert = $signingCert->appendChild($cert);
-
-                      $certDigest = $doc->createElement('etsi:CertDigest');
-                      $certDigest = $cert->appendChild($certDigest);
-
-                        $certDigMethod = $doc->createElement('ds:DigestMethod');
-                        $certDigMethod = $certDigest->appendChild($certDigMethod);
-                        $certDigMethod->setAttribute("Algorithm", self::SHA1);
-
-                        $certDigValue = $doc->createElement('ds:DigestValue', $digCertificado);
-                        $certDigValue = $certDigest->appendChild($certDigValue);
-
-                      $issuerSerial = $doc->createElement('etsi:IssuerSerial');
-                      $issuerSerial = $cert->appendChild($issuerSerial);
-
-                        $x509IssuerName = $doc->createElement('ds:X509IssuerName', $this->getIssuer());
-                        $x509IssuerName = $issuerSerial->appendChild($x509IssuerName);
-
-                        $x509SerialNumber = $doc->createElement('ds:X509SerialNumber', $this->getSerialNumber());
-                        $x509SerialNumber = $issuerSerial->appendChild($x509SerialNumber);
-
-                $refSignedDataProps = $doc->createElement('etsi:SignedDataObjectProperties');
-                $refSignedDataProps = $refSignedProps->appendChild($refSignedDataProps);
-
-                  $dataFormat = $doc->createElement('etsi:DataObjectFormat');
-                  $dataFormat = $refSignedDataProps->appendChild($dataFormat);
-                  $dataFormat->setAttribute("ObjectReference", "#Reference-ID-" . $Reference_ID_number);
-
-                    $dfDescription = $doc->createElement('etsi:Description', "contenido comprobante");
-                    $dfDescription = $dataFormat->appendChild($dfDescription);
-
-                    $dfMimeType = $doc->createElement('etsi:MimeType', "text/xml");
-                    $dfMimeType = $dataFormat->appendChild($dfMimeType);     
-
-          // Obtener el digest de xx
-          $dig = $doc->getElementsByTagName('etsi:SignedProperties')->item(0)->nodeValue;
-          $digest = base64_encode(hash('sha1', $dig, true));
-
-          // INFO DE FIRMA
-          $signedInfo->setAttribute("Id", "Signature-SignedInfo" . $SignedInfo_number);
-
-            $canonicalizationMethod = $doc->createElement('ds:CanonicalizationMethod');
-            $canonicalizationMethod = $signedInfo->appendChild($canonicalizationMethod);
-            $canonicalizationMethod->setAttribute("Algorithm", self::C14N);
-
-            $signatureMethod = $doc->createElement('ds:SignatureMethod');
-            $signatureMethod = $signedInfo->appendChild($signatureMethod);
-            $signatureMethod->setAttribute("Algorithm", self::RSASHA1);
+        // crear nodo para la firma
+        $SignatureTag = $doc->importNode((new XML())->generate([
+            'Signature' => [
+                '@attributes' => [
+                    'xmlns:etsi' => self::XMLETSI,
+                    'Id' => 'Signature' . $Signature_number,
+                ],
+                'SignedInfo' => [
+                    '@attributes' => [
+                        'xmlns:xsi' => self::XMLXSI,
+                        'Id' => 'Signature-SignedInfo' . $SignedInfo_number,
+                    ],
+                    'CanonicalizationMethod' => [
+                        '@attributes' => [
+                            'Algorithm' => self::C14N,
+                        ],
+                    ],
+                    'SignatureMethod' => [
+                        '@attributes' => [
+                            'Algorithm' => self::RSASHA1,
+                        ],
+                    ],
+                ],
+                'SignatureValue' => [
+                    '@attributes' => [
+                        'Id' => 'SignatureValue' . $SignatureValue_number,
+                    ],
+                ],
+                'KeyInfo' => [
+                    '@attributes' => [
+                        'Id' => 'Certificate' . $Certificate_number,
+                    ],
+                    'X509Data' => [
+                        'X509Certificate' => null,
+                    ],
+                    'KeyValue' => [
+                        'RSAKeyValue' => [
+                            'Modulus' => null,
+                            'Exponent' => null,
+                        ],
+                    ],
+                ],
+            ],
+        ], $namespace)->documentElement, true);
         
-            $reference1 = $doc->createElement('ds:Reference');
-            $reference1 = $signedInfo->appendChild($reference1);
-            $reference1->setAttribute("Id", "SignedPropertiesID" . $SignedPropertiesID_number);
-            $reference1->setAttribute("Type", "http://uri.etsi.org/01903#SignedProperties");
-            $reference1->setAttribute("URI", "#Signature". $Signature_number . "-" . "SignedProperties" . $SignedProperties_number);
+        $sinfo = $SignatureTag->getElementsByTagName('SignedInfo')->item(0);        
 
-              $refDigestMethod = $doc->createElement('ds:DigestMethod');
-              $refDigestMethod = $reference1->appendChild($refDigestMethod);
-              $refDigestMethod->setAttribute("Algorithm", self::SHA1);
-              
-              $ref1DigestValue = $doc->createElement('ds:DigestValue', $digest);
-              $ref1DigestValue = $reference1->appendChild($ref1DigestValue);
+        $inscomp = $doc->importNode($compRefTag, true);
+        $inscomp = $sinfo->appendChild($inscomp);
 
-            $reference2 = $doc->createElement('ds:Reference');
-            $reference2 = $signedInfo->appendChild($reference2);
-            $reference2->setAttribute("URI", "#Certificate" . $Certificate_number);
+        $objectTag = $doc->createElement('ds:Object');
+        $objectTag->setAttribute('Id', 'Signature' . $Signature_number . '-' . 'Object' . $Object_number);
+        $objectTag = $SignatureTag->appendChild($objectTag);
+        $insprv = $doc->importNode($proveedorTag, true);
+        $insprv = $objectTag->appendChild($insprv);
 
-              $ref2DigestMethod = $doc->createElement('ds:DigestMethod');
-              $ref2DigestMethod = $reference2->appendChild($ref2DigestMethod);
-              $ref2DigestMethod->setAttribute("Algorithm", self::SHA1);
-                
-              $digest2 = base64_encode(hash('sha1', $this->getCertificate(), true));
+        // reemplazar valores en la firma de        
+        $SignatureTag->getElementsByTagName('Modulus')->item(0)->nodeValue = $this->getModulus();
+        $SignatureTag->getElementsByTagName('Exponent')->item(0)->nodeValue = $this->getExponent();
+        $SignatureTag->getElementsByTagName('X509Certificate')->item(0)->nodeValue = $this->getCertificate(true);
 
-              $ref2DigestValue = $doc->createElement('ds:DigestValue', $digest2);
-              $ref2DigestValue = $reference2->appendChild($ref2DigestValue);
-
-            $reference3 = $doc->createElement('ds:Reference');
-            $reference3 = $signedInfo->appendChild($reference3);
-            $reference3->setAttribute("Id", "Reference-ID-" . $Reference_ID_number);
-            $reference3->setAttribute("URI", "#comprobante");
-
-              $ref3Transforms = $doc->createElement('ds:Transforms');
-              $ref3Transforms = $reference3->appendChild($ref3Transforms);
-
-                $ref3Transform = $doc->createElement('ds:Transform');
-                $ref3Transform = $ref3Transforms->appendChild($ref3Transform);
-                $ref3Transform->setAttribute("Algorithm", self::ENVELOPED);
-
-              $ref3DigestMethod = $doc->createElement('ds:DigestMethod');
-              $ref3DigestMethod = $reference3->appendChild($ref3DigestMethod);
-              $ref3DigestMethod->setAttribute("Algorithm", self::SHA1);
-                
-              $digest3 = base64_encode(hash('sha1', $sha1_comprobante, true));
-
-              $ref3DigestValue = $doc->createElement('ds:DigestValue', $digest3);
-              $ref3DigestValue = $reference3->appendChild($ref3DigestValue);
-
-          //$xmlns = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
-          /*$signedInfoTag = $doc->getElementsByTagName('ds:SignedInfo')->item(0); //;
-          $signedInfoTag->setAttribute("Algorithm", self::ENVELOPED);
-          $firmado = $this->sign($signedInfoTag->nodeValue);
-          if (!$firmado)
+        // calcular SignatureValue
+        /*$hsinfo = $doc->saveHTML($sinfo);
+        $firmado = $this->sign($hsinfo);*/
+        $hsinfo = $doc->saveHTML($sinfo);
+        $firmado = $this->sign($hsinfo);
+        if (!$firmado)
             return false;
-          $signature = wordwrap($firmado, $this->config['wordwrap'], "\n", true);*/
+        $firma = wordwrap($firmado, $this->config['wordwrap'], "\n", true);        
+        $SignatureTag->getElementsByTagName('SignatureValue')->item(0)->nodeValue = $firma;
+        
+        $inscert = $doc->importNode($certRefTag, true);
+        $inscert = $sinfo->appendChild($inscert);
 
-          $SignedInfoTag = $doc->saveHTML($doc->getElementsByTagName('SignedInfo')->item(0));
-          $firmado = $this->sign($SignedInfoTag);
-          if (!$firmado)
-            return false;
-          $signature = wordwrap($firmado, $this->config['wordwrap'], "\n", true);
+        $insdigp = $doc->importNode($digProvTag, true);
+        $insdigp = $sinfo->appendChild($insdigp);
 
-          $doc->getElementsByTagName('ds:SignatureValue')->item(0)->nodeValue = $signature;
-          
-        //return $signedInfoTag;  
         // agregar y entregar firma
-        //$doc->documentElement->appendChild($Signature);
+        $doc->documentElement->appendChild($SignatureTag);
         return $doc->saveXML();
-        
     }
 
     /**

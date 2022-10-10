@@ -8,8 +8,11 @@ use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Ventas\Ventas;
 use Pointerp\Modelos\Ventas\VentasMin;
 use Pointerp\Modelos\Ventas\VentasItems;
+use Pointerp\Modelos\Ventas\VentasImpuestos;
 use Pointerp\Modelos\Maestros\Registros;
-use Pointerp\Modelos\Medicos\Consultas;
+use Pointerp\Modelos\Cxc\Comprobantes;
+use Pointerp\Modelos\Cxc\ComprobanteItems;
+use Pointerp\Modelos\Cxc\ComprobanteDocumentos;
 
 class VentasController extends ControllerBase  {
 
@@ -175,7 +178,7 @@ class VentasController extends ControllerBase  {
           // Procesar items de impuestos          
           foreach ($datos->relImpuestos as $imp) {
             $ins = VentasImpuestos::findFirst([
-              'conditions' => 'VentaId = ' . $mov->Id . ' AND ImpuestoId = ' . $imp->ImpuestoId
+              'conditions' => 'VentaId = ' . $ven->Id . ' AND ImpuestoId = ' . $imp->ImpuestoId
             ]);
             if ($ins != null) {
               $ins->Porcentaje = $imp->Porcentaje;
@@ -220,83 +223,68 @@ class VentasController extends ControllerBase  {
         }
       } else {
         // Crear factura nuevo
-        $num = $this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId);
-        $ven = new Ventas();
-        $ven->Numero = $num + 1;
-        $ven->Tipo = $datos->Tipo;
-        $ven->Fecha = $datos->Fecha;
-        $ven->SucursalId = $datos->SucursalId;
-        $ven->BodegaId = $datos->BodegaId; // BodegaId
-        $ven->Plazo = $datos->Plazo;
-        $ven->ClienteId = $datos->ClienteId;
-        $ven->VendedorId = $datos->VendedorId;
-        $ven->Notas = $datos->Notas;
-        $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
-        $ven->PorcentajeVenta = $datos->PorcentajeVenta;
-        $ven->Subtotal = $datos->Subtotal;
-        $ven->SubtotalEx = $datos->SubtotalEx;
-        $ven->Descuento = $datos->Descuento;
-        $ven->Recargo = $datos->Recargo;
-        $ven->Flete = $datos->Flete;
-        $ven->Impuestos = $datos->Impuestos;
-        $ven->Abonos = $datos->Abonos;
-        $ven->AbonosPf = $datos->AbonosPf;
-        $ven->Estado = $datos->Estado;
-        $ven->Especie = $datos->Especie; // receta, servicio medico
-        $ven->CEClaveAcceso = $datos->CEClaveAcceso;
-        $ven->CEAutorizacion = $datos->CEAutorizacion;
-        $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
-        $ven->CEContenido = $datos->CEContenido;
-        $ven->CEEtapa = $datos->CEEtapa;
-        $ven->CERespuestaId = $datos->CERespuestaId;
-        $ven->CERespuestaTipo = $datos->CERespuestaTipo;
-        $ven->CERespuestaMsj = $datos->CERespuestaMsj;
-        $ven->Comprobante = $datos->Comprobante;
-        $ven->Contado = $datos->Contado;
-        $ven->Operador = $datos->Operador;
-        if ($ven->create()) {
-          $ret->res = true;
-          $ret->cid = $ven->Id;
-          $ret->num = $ven->Numero;
-          $ret->msj = "Se registro correctamente la nueva transaccion";  
-          // Crear items
-          foreach ($datos->relItems as $mi) {
-            $ins = new VentasItems();
-            $ins->VentaId = $ven->Id;
-            $ins->ProductoId = $mi->ProductoId;
-            $ins->Bodega = $mi->Bodega;
-            $ins->Cantidad = $mi->Cantidad;
-            $ins->Precio = $mi->Precio;
-            $ins->Descuento = $mi->Descuento;
-            $ins->Adicional = $mi->Adicional;
-            $ins->Despachado = $mi->Despachado;
-            $ins->Costo = $mi->Costo;
-            $ins->create();
-          }
-          foreach ($datos->relImpuestos as $im) {
-            $ins = new VentasImpuestos();
-            $ins->VentaId = $ven->Id;
-            $ins->ImpuestoId = $im->ImpuestoId;
-            $ins->Porcentaje = $im->Porcentaje;
-            $ins->base = $im->base;
-            $ins->Valor = $im->Valor;
-            $ins->create();
-          }
-          $this->response->setStatusCode(201, 'Created');
-        } else {
-          $msj = "No se pudo crear el nuevo registro: " . "\n";
-          foreach ($ven->getMessages() as $m) {
-            $msj .= $m . "\n";
-          }
-          $ret->cid = 0;
-          $ret->msj = $msj;
+        $creadoRes = $this->guardarVentaNueva($datos, 0);
+        $ret->res = $creadoRes->res;
+        $ret->cid = $creadoRes->cid;
+        $ret->num = $creadoRes->Numero;
+        $ret->msj = $creadoRes->msj;
+        $ret->ven = $creadoRes->ven;
+        if ($ret->res) {
+          $this->response->setStatusCode(201, 'Ok');
         }
       }
-      $ret->ven = Ventas::findFirstById($ret->cid);
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
       $this->response->setStatusCode(500, 'Error');
       $ret->cid = 0;
       $ret->msj = $e->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function ventaCrearCobrarAction() {
+    $caja = $this->dispatcher->getParam('caja');
+    $usuario = $this->dispatcher->getParam('usuario');
+    $datos = $this->request->getJsonRawBody();
+    $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Descuento + $datos->Recargo + $datos->Flete;
+    $ret = $this->guardarVentaNueva($datos, $cobrado);
+    if ($ret->res) {
+      $vta = $ret->ven;
+      $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId);
+      $cobro = new Comprobantes();
+      $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
+      $cobro->Fecha = new \DateTime();
+      $cobro->Total = $cobrado;
+      $cobro->SucursalId = $datos->SucursalId;
+      $cobro->Especie = 0;
+      $cobro->Numero = $cobroNum;
+      $cobro->UsuarioId = $usuario;
+      if ($cobro->create()) {
+        $doc = new ComprobanteDocumentos();
+        if ($datos->Tipo == 47) { // (int)EntidadesEnum.EnPedido
+          $doc->Concepto = 52; // (int)EntidadesEnum.EnAbonosEfectivo
+          $doc->Notas = "Abono a pedido reservado";
+        } else {
+          $doc->Notas = "Cobro de venta de contado";
+        }
+        $doc->Origen = $vta->tipo;
+        $doc->Referencia = $vta->id;
+        $doc->Rebajas = $cobrado;
+        $doc->create();
+
+        $cobitem = new ComprobanteItems();
+        $cobitem->Numero = $caja; // id de la caja
+        $cobitem->Fecha = new \DateTime();
+        $cobitem->Cuenta = "";
+        $cobitem->Autorizacion = "";
+        $cobitem->Nombres = "";
+        $cobitem->Codigo = "";
+        $cobitem->Valor = $cobrado;
+        $cobitem->Descripcion = "";
+        $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
+        $cobitem->create();
+      }
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($ret));
@@ -370,7 +358,7 @@ class VentasController extends ControllerBase  {
       try {
         $msj = \ComprobantesElectronicos::procesarFactura($ven, $db);
         //$msj = "Procesado correctamente";
-      } catch (Exception $e) {
+      } catch (\Exception $e) {
         $this->response->setStatusCode(500, 'Error');  
         $msj = $e->getMessage();
       }
@@ -392,8 +380,8 @@ class VentasController extends ControllerBase  {
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($msj));
     $this->response->send();
+    echo var_dump($msj);
   }
-
   #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {
@@ -401,6 +389,97 @@ class VentasController extends ControllerBase  {
       'column' => 'Numero',
       'conditions' => 'Tipo = ' . $tipo . ' AND SucursalId = ' . $suc
     ]) ?? 0;
+  }
+
+  private function ultimoNumeroCobro($tipo, $suc) {
+    return Comprobantes::maximum([
+      'column' => 'Numero',
+      'conditions' => 'Tipo = ' . $tipo . ' AND SucursalId = ' . $suc
+    ]) ?? 0;
+  }
+
+  private function guardarVentaNueva($datos, $cobrado) {
+    $ret = (object) [
+      'res' => false,
+      'cid' => 0,
+      'ven' => null,
+      'msj' => 'Error al crear'
+    ];
+
+    $num = $this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId);
+    $ven = new Ventas();
+    if (property_exists($datos, 'UCodigo'))
+      $ven->Codigo = $datos->UCodigo;
+    $ven->Numero = $num + 1;
+    $ven->Tipo = $datos->Tipo;
+    $ven->Fecha = $datos->Fecha;
+    $ven->SucursalId = $datos->SucursalId;
+    $ven->BodegaId = $datos->BodegaId;
+    $ven->Plazo = $datos->Plazo;
+    $ven->ClienteId = $datos->ClienteId;
+    $ven->VendedorId = $datos->VendedorId;
+    $ven->Notas = $datos->Notas;
+    $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
+    $ven->PorcentajeVenta = $datos->PorcentajeVenta;
+    $ven->Subtotal = $datos->Subtotal;
+    $ven->SubtotalEx = $datos->SubtotalEx;
+    $ven->Descuento = $datos->Descuento;
+    $ven->Recargo = $datos->Recargo;
+    $ven->Flete = $datos->Flete;
+    $ven->Impuestos = $datos->Impuestos;
+    $ven->Abonos = $cobrado;
+    $ven->AbonosPf = $datos->AbonosPf;
+    $ven->Estado = $datos->Estado;
+    $ven->Especie = $datos->Especie; // receta, servicio medico
+    $ven->CEClaveAcceso = $datos->CEClaveAcceso;
+    $ven->CEAutorizacion = $datos->CEAutorizacion;
+    $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
+    $ven->CEContenido = $datos->CEContenido;
+    $ven->CEEtapa = $datos->CEEtapa;
+    $ven->CERespuestaId = $datos->CERespuestaId;
+    $ven->CERespuestaTipo = $datos->CERespuestaTipo;
+    $ven->CERespuestaMsj = $datos->CERespuestaMsj;
+    $ven->Comprobante = $datos->Comprobante;
+    $ven->Contado = $datos->Contado;
+    $ven->Operador = $datos->Operador;
+    if ($ven->create()) {
+      $ret->res = true;
+      $ret->cid = $ven->Id;
+      $ret->num = $ven->Numero;
+      $ret->msj = "Se registro correctamente la nueva transaccion";  
+      // Crear items
+      foreach ($datos->relItems as $mi) {
+        $ins = new VentasItems();
+        $ins->VentaId = $ven->Id;
+        $ins->ProductoId = $mi->ProductoId;
+        $ins->Bodega = $mi->Bodega;
+        $ins->Cantidad = $mi->Cantidad;
+        $ins->Precio = $mi->Precio;
+        $ins->Descuento = $mi->Descuento;
+        $ins->Adicional = $mi->Adicional;
+        $ins->Despachado = $mi->Despachado;
+        $ins->Costo = $mi->Costo;
+        $ins->create();
+      }
+      foreach ($datos->relImpuestos as $im) {
+        $ins = new VentasImpuestos();
+        $ins->VentaId = $ven->Id;
+        $ins->ImpuestoId = $im->ImpuestoId;
+        $ins->Porcentaje = $im->Porcentaje;
+        $ins->base = $im->base;
+        $ins->Valor = $im->Valor;
+        $ins->create();
+      }
+    } else {
+      $msj = "No se pudo crear el nuevo registro: " . "\n";
+      foreach ($ven->getMessages() as $m) {
+        $msj .= $m . "\n";
+      }
+      $ret->cid = 0;
+      $ret->msj = $msj;
+    }  
+    $ret->ven = Ventas::findFirstById($ret->cid);
+    return $ret;
   }
 
   private function afectarInventario($item, $bod, $origen, $signo) {

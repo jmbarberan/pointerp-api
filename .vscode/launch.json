@@ -8,33 +8,31 @@
       "name": "Listen for Xdebug 2 (Legacy)",
       "type": "php",
       "request": "launch",
-      "port": 9090
+      "port": 9000
     },
     {
       "name": "Launch Built-in web server",
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
-        "-dxdebug.mode=debug",
-        "-dxdebug.start_with_request=yes",
-        "-S",
-        "192.168.100.220:9090",
-        "-t",
-        "public"
-      ],
-      "program": "",
-      "cwd": "${workspaceRoot}",
-      "port": 9090,
-      "serverReadyAction": {
+        "-S", "192.168.100.220:9090",
+        "-t", "${workspaceFolder}/public",
+        "-d", "xdebug.remote_enable = 1",
+        "-d", "xdebug.remote_autostart = 1",
+        "-d", "xdebug.remote_port = 9000"
+      ],      
+      "port": 9000,
+      /*"serverReadyAction": {
         "pattern": "Development Server \\(http://192.168.100.220:([0-9]+)\\) started",
         "uriFormat": "http://192.168.100.220:%s",
         "action": "openExternally"
-      },
+      },*/
       "env": {
-        "DB_HOST": "localhost",
-        "DB_NAME": "pointerp",
-        "DB_USER": "admin",
-        "DB_PASS": "jmbg",
+        "DBS_HOST":"localhost",
+        "DBS_NAME":"viniapro",
+        "DBS_USER":"postgres",
+        "DBS_PASS":"jmbg",
+        "DBS_PORT":"5435"
       }
     }
   ]

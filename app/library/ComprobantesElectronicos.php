@@ -1,6 +1,6 @@
 <?php
 
-include APP_PATH . '/library/esign.php';
+include APP_PATH . '/library/FirmaElectronica.php';
 use sasco\LibreDTE\FirmaElectronica;
 
 /*include APP_PATH . '/library/Exception/XmlSignatureValidatorException.php';
@@ -310,7 +310,11 @@ class ComprobantesElectronicos {
   static function firmarXml($xml, $pfx, $pass) {
     $firma_config = [ 'file' => $pfx, 'pass' => $pass ];
     $fe = new FirmaElectronica($firma_config);
-    return $fe->signXML($xml, $reference = '', $tag = null, $xmlns_xsi = false);
+    return $fe->signXML($xml, $reference = '#comprobante', $tag = false, $xmlns_xsi = [
+      'http://www.w3.org/2000/09/xmldsig#',
+      'ds'
+    ]);
+    //return $fe->getData()['serialNumber'];
     //$rutapfx = __DIR__ . '/public/index.php'
     /*$rutapfx = $_SERVER["DOCUMENT_ROOT"] .DIRECTORY_SEPARATOR.
       'certs'.DIRECTORY_SEPARATOR. $pfx;*/
@@ -506,7 +510,7 @@ class ComprobantesElectronicos {
       'ruc' => $emp["Ruc"],
       'razonSocial' => $emp["RazonSocial"],
       'nombreComercial' => $emp["NombreComercial"],
-      'contribuyenteEspecial' => $emp["CEResolucion"] != null ? $emp["CEResolucion"] : "",
+      'contribuyenteEspecial' => $emp["CEResolucion"] != null ? $emp["CEResolucion"] : "NO",
       'obligadoContabilidad' => intval($emp["ObligadoContabilidad"]) == 1 ? 0 : 1
     ];
     $rutapfx = $emp["CertificadoRuta"];
@@ -516,8 +520,8 @@ class ComprobantesElectronicos {
     }
     
     $xml = self::crearXmlFactura($comprobante, $tipoDatos, $contribuyente);
-    $cert = APP_PATH . '\files\sign\CERT_' . '0912639069001' . '.cer';
-    $pem  = APP_PATH . '\files\sign\KEY_' . '0912639069001' . '.pem';
+    /*$cert = APP_PATH . '\files\sign\CERT_' . '0912639069001' . '.cer';
+    $pem  = APP_PATH . '\files\sign\KEY_' . '0912639069001' . '.pem';*/
     $frm = self::firmarXml($xml, $rutapfx, $pass);
     file_put_contents('fa_' . strval($comprobante->Numero) . '.xml', "\xEF\xBB\xBF".  $frm);
     

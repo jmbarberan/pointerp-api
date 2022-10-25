@@ -18,6 +18,10 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'productosBuscar',
     ]);
+    $this->addGet('/productos/cache', [
+      'controller' => $controlador,
+      'action'     => 'productosParaCache',
+    ]);
     $this->addGet('/productos/emp/{emp}/estado/{estado}/filtro/{filtro}/extendida/{extendida}/seleccionar', [
       'controller' => $controlador,
       'action'     => 'productoSeleccionar',

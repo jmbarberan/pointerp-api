@@ -96,6 +96,31 @@ class InventariosController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function productosParaCacheAction() {
+    $cmd = "Select r.Id as prcId, r.Precio, r.VolumenCondicion," .
+    "p.Id, p.Codigo, p.Barcode, p.Nombre, p.Grupo, p.Descripcion, p.Medida, p.Tipo, p.UltimoCosto, p.EmpresaId, p.Adicional," .
+    "p.EmbalejeCantidad, p.PrecioOrigen, p.Estado," .
+    "i.Id as impId, ImpuestoId, i.ProductoId," .
+    "m.Id as ivaId, m.Nombre as ivaNombre, m.Porcentaje, m.Actualizado, m.Estado " .
+    "from Pointerp\Modelos\ProductosPrecios r " .
+    "right join Pointerp\Modelos\Productos p on r.ProductoId = p.Id " .
+    "left join Pointerp\Modelos\ProductosImposiciones i on i.ProductoId = p.Id " .
+    "left join Pointerp\Modelos\Impuestos m on i.ImpuestoId = m.Id " .
+    "order by r.ProductoId";
+
+    $qry = new Query($cmd, Di::getDefault());
+    $rws = $qry->execute();
+    if ($rws->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rws));
+    $this->response->send();
+
+  }
+
   public function productoSeleccionarAction() {
     $eliminados = $this->dispatcher->getParam('estado');
     $filtro = $this->dispatcher->getParam('filtro');

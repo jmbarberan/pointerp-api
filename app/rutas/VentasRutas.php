@@ -43,5 +43,9 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaGuardar',
     ]);
+    $this->addPost('/comprobantes/guardar/usuario/{usuario}/caja/{caja}/cobrar', [
+      'controller' => $controlador,
+      'action'     => 'ventaCrearCobrar',
+    ]);
   }
 }

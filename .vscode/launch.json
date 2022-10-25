@@ -5,28 +5,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Listen for Xdebug 2 (Legacy)",
-      "type": "php",
-      "request": "launch",
-      "port": 9000
-    },
-    {
-      "name": "Launch Built-in web server",
+      "name": "Built-in web server launch",
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
         "-S", "192.168.100.220:9090",
         "-t", "${workspaceFolder}/public",
-        "-d", "xdebug.remote_enable = 1",
-        "-d", "xdebug.remote_autostart = 1",
-        "-d", "xdebug.remote_port = 9000"
-      ],      
+      ],
       "port": 9000,
-      /*"serverReadyAction": {
-        "pattern": "Development Server \\(http://192.168.100.220:([0-9]+)\\) started",
-        "uriFormat": "http://192.168.100.220:%s",
-        "action": "openExternally"
-      },*/
       "env": {
         "DBS_HOST":"localhost",
         "DBS_NAME":"viniapro",

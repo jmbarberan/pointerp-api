@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+use Phalcon\Di;
 use Phalcon\Escaper;
 use Phalcon\Flash\Direct as Flash;
 use Phalcon\Mvc\Model\Metadata\Memory as MetaDataAdapter;
@@ -12,11 +13,9 @@ use Phalcon\Session\Adapter\Stream as SessionAdapter;
 use Phalcon\Session\Manager as SessionManager;
 use Phalcon\Url as UrlResolver;
 use Phalcon\Http\Request;
-use Phalcon\Db;
-use Phalcon\Db\Exception;
 use Phalcon\Db\Adapter\Pdo\Postgresql as PgConnection;
-//use Pointerp\Library\Prevuelo;
 
+$di = Di::getDefault();
 
 /**
  * Shared configuration service
@@ -85,6 +84,7 @@ $di->setShared('db', function () {
         "FROM subscripciones.subscripciones " . 
         "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
     );
+    $config = $this->getConfig();
     if (count($con) > 0) {
         $con = reset($con);
         $params = [
@@ -95,11 +95,11 @@ $di->setShared('db', function () {
             //'charset'  => $config->database->charset,
             'port'     => $con['dbport'],
         ];
-        $config = $this->getConfig();
         $config->entorno->sharedemps    = $con['sharedemps'];
         $config->entorno->exclusive     = $con['dbexclusive'];
         $config->entorno->subscripcion  = $con['id'];
     } else {
+        
         $params = [
             'host'     => $config->dbfallback->host,
             'username' => $config->dbfallback->user,
@@ -147,6 +147,7 @@ $di->setShared('dbNomina', function () {
         "FROM subscripciones.subscripciones " . 
         "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
     );
+    $config = $this->getConfig();
     if (count($con) > 0) {
         $con = reset($con);
         $params = [
@@ -156,7 +157,6 @@ $di->setShared('dbNomina', function () {
             'dbname'   => $con['ndbname'],
             'port'     => $con['ndbport'],
         ];
-        $config = $this->getConfig();
         $config->entorno->sharedemps    = $con['sharedemps'];
         $config->entorno->exclusive     = $con['dbexclusive'];
         $config->entorno->subscripcion  = $con['id'];

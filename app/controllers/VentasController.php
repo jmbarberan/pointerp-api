@@ -223,7 +223,7 @@ class VentasController extends ControllerBase  {
         }
       } else {
         // Crear factura nuevo
-        $creadoRes = $this->guardarVentaNueva($datos, 0);
+        $creadoRes = $this->guardarVentaNueva($datos, 0, false);
         $ret->res = $creadoRes->res;
         $ret->cid = $creadoRes->cid;
         $ret->num = $creadoRes->Numero;
@@ -247,44 +247,70 @@ class VentasController extends ControllerBase  {
     $caja = $this->dispatcher->getParam('caja');
     $usuario = $this->dispatcher->getParam('usuario');
     $datos = $this->request->getJsonRawBody();
-    $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Descuento + $datos->Recargo + $datos->Flete;
-    $ret = $this->guardarVentaNueva($datos, $cobrado);
+    $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
+    $ret = $this->guardarVentaNueva($datos, $cobrado, false);
     if ($ret->res) {
       $vta = $ret->ven;
-      $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId);
+      $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
       $cobro = new Comprobantes();
       $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
-      $cobro->Fecha = new \DateTime();
+      $cobro->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
       $cobro->Total = $cobrado;
       $cobro->SucursalId = $datos->SucursalId;
       $cobro->Especie = 0;
       $cobro->Numero = $cobroNum;
       $cobro->UsuarioId = $usuario;
+      $cobro->Estado = 0;
       if ($cobro->create()) {
         $doc = new ComprobanteDocumentos();
-        if ($datos->Tipo == 47) { // (int)EntidadesEnum.EnPedido
+        if ($vta->Tipo == 47) { // (int)EntidadesEnum.EnPedido
           $doc->Concepto = 52; // (int)EntidadesEnum.EnAbonosEfectivo
           $doc->Notas = "Abono a pedido reservado";
         } else {
           $doc->Notas = "Cobro de venta de contado";
         }
-        $doc->Origen = $vta->tipo;
-        $doc->Referencia = $vta->id;
+        $doc->ComprobanteId = $cobro->Id;
+        $doc->Origen = $vta->Tipo;
+        $doc->Referencia = $vta->Id;
         $doc->Rebajas = $cobrado;
-        $doc->create();
-
-        $cobitem = new ComprobanteItems();
-        $cobitem->Numero = $caja; // id de la caja
-        $cobitem->Fecha = new \DateTime();
-        $cobitem->Cuenta = "";
-        $cobitem->Autorizacion = "";
-        $cobitem->Nombres = "";
-        $cobitem->Codigo = "";
-        $cobitem->Valor = $cobrado;
-        $cobitem->Descripcion = "";
-        $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
-        $cobitem->create();
+        $doc->Recargos = 0;
+        $doc->Soporte = 0;
+        if($doc->create()) {
+          $cobitem = new ComprobanteItems();
+          $cobitem->ComprobanteId = $cobro->Id;
+          $cobitem->Numero = $caja; // id de la caja
+          $cobitem->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
+          $cobitem->Cuenta = " ";
+          $cobitem->Autorizacion = " ";
+          $cobitem->Nombres = " ";
+          $cobitem->Codigo = " ";
+          $cobitem->Valor = $cobrado;
+          $cobitem->Descripcion = "";
+          $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
+          if(!$cobitem->create()) {
+            $msj = "No se pudo crear el nuevo Item: " . "\n";
+            foreach ($cobitem->getMessages() as $m) {
+              $msj .= $m . "\n";
+            }
+            $ret->msj = $msj;
+          }
+        } else {
+          $msj = "No se pudo crear el nuevo Documento: " . "\n";
+          foreach ($doc->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->msj = $msj;
+        }
+      } else {
+        $msj = "No se pudo crear el nuevo cobro: " . "\n";
+        foreach ($cobro->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+        $ret->msj = $msj;
       }
+    } else {
+      $ret->res = true;
+      $ret->msj = "Se creo correctamente el comprobante, pero no se pudo registrar el cobro";
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($ret));
@@ -398,7 +424,7 @@ class VentasController extends ControllerBase  {
     ]) ?? 0;
   }
 
-  private function guardarVentaNueva($datos, $cobrado) {
+  private function guardarVentaNueva($datos, $cobrado, $min) {
     $ret = (object) [
       'res' => false,
       'cid' => 0,
@@ -406,11 +432,11 @@ class VentasController extends ControllerBase  {
       'msj' => 'Error al crear'
     ];
 
-    $num = $this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId);
+    $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
     $ven = new Ventas();
-    if (property_exists($datos, 'UCodigo'))
-      $ven->Codigo = $datos->UCodigo;
-    $ven->Numero = $num + 1;
+    /*if (property_exists($datos, 'UCodigo'))
+      $ven->Codigo = $datos->UCodigo;*/
+    $ven->Numero = $num;
     $ven->Tipo = $datos->Tipo;
     $ven->Fecha = $datos->Fecha;
     $ven->SucursalId = $datos->SucursalId;
@@ -429,7 +455,7 @@ class VentasController extends ControllerBase  {
     $ven->Impuestos = $datos->Impuestos;
     $ven->Abonos = $cobrado;
     $ven->AbonosPf = $datos->AbonosPf;
-    $ven->Estado = $datos->Estado;
+    $ven->Estado = $cobrado > 0 ? 1 : $datos->Estado;
     $ven->Especie = $datos->Especie; // receta, servicio medico
     $ven->CEClaveAcceso = $datos->CEClaveAcceso;
     $ven->CEAutorizacion = $datos->CEAutorizacion;
@@ -440,7 +466,7 @@ class VentasController extends ControllerBase  {
     $ven->CERespuestaTipo = $datos->CERespuestaTipo;
     $ven->CERespuestaMsj = $datos->CERespuestaMsj;
     $ven->Comprobante = $datos->Comprobante;
-    $ven->Contado = $datos->Contado;
+    $ven->Contado = $cobrado > 0 ? 1 : 0;
     $ven->Operador = $datos->Operador;
     if ($ven->create()) {
       $ret->res = true;
@@ -470,6 +496,7 @@ class VentasController extends ControllerBase  {
         $ins->Valor = $im->Valor;
         $ins->create();
       }
+      $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
     } else {
       $msj = "No se pudo crear el nuevo registro: " . "\n";
       foreach ($ven->getMessages() as $m) {
@@ -477,8 +504,7 @@ class VentasController extends ControllerBase  {
       }
       $ret->cid = 0;
       $ret->msj = $msj;
-    }  
-    $ret->ven = Ventas::findFirstById($ret->cid);
+    }
     return $ret;
   }
 

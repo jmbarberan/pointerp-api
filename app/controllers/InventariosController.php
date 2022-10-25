@@ -12,6 +12,7 @@ use Pointerp\Modelos\Inventarios\Compras;
 use Pointerp\Modelos\Inventarios\ComprasItems;
 use Pointerp\Modelos\Inventarios\ComprasImpuestos;
 use Pointerp\Modelos\Inventarios\Kardex;
+use Pointerp\Modelos\Inventarios\Impuestos;
 use Pointerp\Modelos\Inventarios\Movimientos;
 use Pointerp\Modelos\Inventarios\MovimientosItems;
 use Pointerp\Modelos\Inventarios\Existencias;
@@ -98,14 +99,15 @@ class InventariosController extends ControllerBase  {
 
   public function productosParaCacheAction() {
     $cmd = "Select r.Id as prcId, r.Precio, r.VolumenCondicion," .
-    "p.Id, p.Codigo, p.Barcode, p.Nombre, p.Grupo, p.Descripcion, p.Medida, p.Tipo, p.UltimoCosto, p.EmpresaId, p.Adicional," .
+    "p.Id, p.Codigo, p.Barcode, p.Nombre, p.Grupo, p.Descripcion, " . 
+    "p.Medida, p.Tipo, p.UltimoCosto, p.EmpresaId, p.Adicional," .
     "p.EmbalejeCantidad, p.PrecioOrigen, p.Estado," .
     "i.Id as impId, ImpuestoId, i.ProductoId," .
-    "m.Id as ivaId, m.Nombre as ivaNombre, m.Porcentaje, m.Actualizado, m.Estado " .
-    "from Pointerp\Modelos\ProductosPrecios r " .
-    "right join Pointerp\Modelos\Productos p on r.ProductoId = p.Id " .
-    "left join Pointerp\Modelos\ProductosImposiciones i on i.ProductoId = p.Id " .
-    "left join Pointerp\Modelos\Impuestos m on i.ImpuestoId = m.Id " .
+    "m.Id as ivaId, m.Nombre as ivaNombre, m.Porcentaje, m.Actualizado " .
+    "from Pointerp\Modelos\Maestros\ProductosPrecios r " .
+    "right join Pointerp\Modelos\Maestros\Productos p on r.ProductoId = p.Id " .
+    "left join Pointerp\Modelos\Maestros\ProductosImposiciones i on i.ProductoId = p.Id " .
+    "left join Pointerp\Modelos\Maestros\Impuestos m on i.ImpuestoId = m.Id " .
     "order by r.ProductoId";
 
     $qry = new Query($cmd, Di::getDefault());

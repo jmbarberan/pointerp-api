@@ -14,6 +14,7 @@ use Pointerp\Modelos\Roles;
 class SeguridadController extends ControllerBase
 {
     public function usuariosTodosAction() {
+        $res = [];
         $this->view->disable();
         $estado = $this->dispatcher->getParam('estado');
         if ($estado == 9) {

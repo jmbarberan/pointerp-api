@@ -166,6 +166,9 @@ class VentasController extends ControllerBase  {
               $ins->Descuento = $mi->Descuento;
               $ins->Adicional = $mi->Adicional;
               $ins->Despachado = $mi->Despachado;
+              if ($mi->Codigo) {
+                $ins->Codigo = $mi->Codigo;
+              }
               $ins->Costo = $mi->Costo;
               if ($mi->Id > 0) {
                 $ins->update();
@@ -484,6 +487,9 @@ class VentasController extends ControllerBase  {
         $ins->Descuento = $mi->Descuento;
         $ins->Adicional = $mi->Adicional;
         $ins->Despachado = $mi->Despachado;
+        if ($mi->Codigo) {
+          $ins->Codigo = $mi->Codigo;
+        }
         $ins->Costo = $mi->Costo;
         $ins->create();
       }

@@ -2,25 +2,14 @@
 
 namespace Pointerp\Modelos;
 
-use Phalcon\Mvc\Model;
-use Pointerp\Modelos\Roles;
-
 class Usuarios extends Modelo
 {
-    public function initialize()
-    {
-        $this->setSource('usuarios');
-        $this->hasOne('RolId', Roles::class, 'Id', [
-            'reusable' => true, // cache
-            'alias'    => 'relRol',
-          ]);
-    }
+  public function initialize()
+  {
+    $this->setSource('usuarios');
+  }
 
-    public function jsonSerialize () : array {
-        $res = $this->ToUnicodeArray();        
-        if ($this->relRol != null) {
-          $res['relRol'] = $this->relRol->ToUnicodeArray();
-        }
-        return $res;
-    }
+  public function jsonSerialize () : array {
+    return $this->ToUnicodeArray();
+  }
 }

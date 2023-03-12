@@ -103,7 +103,8 @@ class VentasController extends ControllerBase  {
         'res' => false,
         'cid' => $datos->Id,
         'ven' => null,
-        'msj' => 'Los datos no se pudieron procesar'
+        'msj' => 'Los datos no se pudieron procesar',
+        'num' => $datos->Numero
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
       $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
@@ -226,12 +227,7 @@ class VentasController extends ControllerBase  {
         }
       } else {
         // Crear factura nuevo
-        $creadoRes = $this->guardarVentaNueva($datos, 0, false);
-        $ret->res = $creadoRes->res;
-        $ret->cid = $creadoRes->cid;
-        $ret->num = $creadoRes->Numero;
-        $ret->msj = $creadoRes->msj;
-        $ret->ven = $creadoRes->ven;
+        $ret = $this->guardarVentaNueva($datos, 0, false);
         if ($ret->res) {
           $this->response->setStatusCode(201, 'Ok');
         }
@@ -432,7 +428,8 @@ class VentasController extends ControllerBase  {
       'res' => false,
       'cid' => 0,
       'ven' => null,
-      'msj' => 'Error al crear'
+      'msj' => 'Error al crear',
+      'num' => 0
     ];
 
     $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;

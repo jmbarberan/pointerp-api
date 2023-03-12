@@ -2,6 +2,7 @@
 
 namespace Pointerp\Controladores;
 
+use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Maestros\Productos;
@@ -17,6 +18,7 @@ use Pointerp\Modelos\Inventarios\Movimientos;
 use Pointerp\Modelos\Inventarios\MovimientosItems;
 use Pointerp\Modelos\Inventarios\Existencias;
 use Pointerp\Modelos\Maestros\Registros;
+use Pointerp\Modelos\SubscripcionesEmpresas;
 
 class InventariosController extends ControllerBase  {
 
@@ -298,14 +300,14 @@ class InventariosController extends ControllerBase  {
             if ($datos->relImposiciones && count($datos->relImposiciones) <= 0) { // Eliminar
               $prdimp = reset($pivas);
               $piv = ProductosImposiciones::findFirstById($prdimp->Id);
-              if ($piv != undefined) {
+              if (isset($piv) && $piv != null) {
                 $piv->delete();
               }
             }
           } else {
             // no hay resgistro de iva db
             if ($datos->relImposiciones && count($datos->relImposiciones) > 0) {
-              $prdimp = reset($datos>relImposiciones);
+              $prdimp = reset($datos->relImposiciones);
               $piv = new ProductosImposiciones();
               $piv->ProductoId = $datos->Id;
               $piv->ImpuestoId = $prdimp->ImpuestoId;
@@ -356,7 +358,7 @@ class InventariosController extends ControllerBase  {
 
         $prd = new Productos();
         $prd->Codigo = $newcod; //strval($num);
-        $prd->Nombre = utf8_decode($datos->Nombre);
+        $prd->Nombre = mb_convert_encoding($datos->Nombre, "UTF-8", mb_detect_encoding($datos->Nombre));
         $prd->Barcode = $datos->Barcode;
         $prd->Grupo = $datos->Grupo;
         $prd->Descripcion = $datos->Descripcion;
@@ -436,6 +438,7 @@ class InventariosController extends ControllerBase  {
         $this->response->setStatusCode(200, 'Ok');
       } else {
         $this->response->setStatusCode(500, 'Error');
+        $msj = "";
         foreach ($res->getMessages() as $m) {
           $msj .= $m . "\n";
         }
@@ -528,7 +531,7 @@ class InventariosController extends ControllerBase  {
       array_walk_recursive($eay, function(&$item) {
         try {
           if (is_string($item)) {
-            $item = utf8_encode($item);
+            $item = mb_convert_encoding($item, "UTF-8", mb_detect_encoding($item));
           }
         } catch (Exception $e) { }
       });

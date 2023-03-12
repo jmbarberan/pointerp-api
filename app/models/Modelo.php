@@ -16,7 +16,7 @@ class Modelo extends Model
         $res = $this->toArray();        
         array_walk_recursive($res, function(&$item) {
             if (is_string($item)) {
-                $item = utf8_encode($item);
+                $item = mb_convert_encoding($item, "UTF-8", mb_detect_encoding($item));
             }
         });
         return $res; 

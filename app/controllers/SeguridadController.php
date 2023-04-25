@@ -10,6 +10,7 @@ use Pointerp\Modelos\Usuarios;
 use Pointerp\Modelos\Autorizaciones;
 use Pointerp\Modelos\Privilegios;
 use Pointerp\Modelos\Roles;
+use Pointerp\Modelos\UsuariosSub;
 
 class SeguridadController extends ControllerBase
 {
@@ -496,7 +497,7 @@ class SeguridadController extends ControllerBase
     }
 
     private function alterarEstadoAutorizacion($id, $est, $sup) {
-        $aut = Autorizaciones::findFirstById($id);
+        /*$aut = Autorizaciones::findFirstById($id);
         if ($aut != null) {
             $hoy = new \DateTime();
             $aut->estado = $est;
@@ -509,27 +510,7 @@ class SeguridadController extends ControllerBase
                 $aut->ejecucion = $hoy->format('Y-m-d H:i:s');
             }
             return $aut->save();
-        }
-    }
-    
-    private function crearToken($usr) {
-        $di = Di::getDefault();
-        $config = $di->getConfig();
-        $token = openssl_random_pseudo_bytes($config->entorno->tokenSize);
-        $token = bin2hex($token);
-        $hoy = new \DateTime();
-        $cve = new Claves();
-        $cve->clave   = $token;
-        $cve->usuario = $usr;
-        $cve->emision = $hoy->format('Y-m-d H:i:s');
-        $cve->validez = $config->entorno->tokenDuracion;
-        $cve->estado = 0;
-        //$result = $cve->create();
-
-        /*if ($result === false) {
-            $token = 'Error no se pudo registrar la clave';
         }*/
-        return ['token' => $token, 'clave' => $cve];
     }
 
     public function prevueloAction() {
@@ -552,6 +533,51 @@ class SeguridadController extends ControllerBase
         $this->response->setContentType('application/json', 'UTF-8');
         //$this->response->setContent(json_encode('code:' . base64_decode($txt)));
         $this->response->setContent(json_encode('code:' . base64_encode($txt)));
+        $this->response->send();
+    }
+
+    public function accederUsuarioSubAction() {
+        $cred = $this->request->getJsonRawBody();
+        $di = Di::getDefault();
+        $clave = base64_decode($cred->cla);
+        $phql = 'SELECT * FROM Pointerp\Modelos\UsuariosSub 
+            WHERE codigo = "%s" AND clave = "%s"';
+        $qry = new Query(sprintf($phql, $cred->usr, $clave), $di);
+        $rws = $qry->execute();
+        $this->response->setStatusCode(401, 'Unauthorized');
+        $rus = 'El usuario y/o contraseña no son validos';
+        if ($rws->count() === 1) {
+            $rus = $rws->getFirst();
+            $rus->clave = '';
+            $this->response->setStatusCode(202, 'Accepted');
+        }
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setContent(json_encode($rus));
+        $this->response->send();
+    }
+
+    public function cambiarClaveUsuarioSubAction() {
+        $cred = $this->request->getJsonRawBody();
+        $id = $cred->id;
+        $cve = $cred->clave;
+        $usr = UsuariosSub::findFirstById($id);
+        $res = 'No se ha podido actualizar la contraseña';
+        $this->response->setStatusCode(404, 'Not found');
+        if ($usr != null) {
+            $usr->clave = $cve;
+            $usr->reseteado = 0;
+            $res = $usr->save();
+            if ($res != false) {
+                $res = 'La contraseña se actualizó exitósamente';
+                $this->response->setStatusCode(200, 'Ok');
+            } else {
+                $res = 'La contraseña no se pudo actualizar';
+            }
+        } else {
+            $res = 'El usuario no existe';
+        }
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setContent(json_encode($res));
         $this->response->send();
     }
 }

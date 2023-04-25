@@ -34,5 +34,20 @@ class MaestrosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'proveedoresPorNombresEstado',
     ]);
+
+    $this->addGet('/clientes/sri', [
+      'controller' => $controlador,
+      'action'     => 'clientesSriLista',
+    ]);
+
+    $this->addPut('/clientes/sri/modificar/estado', [
+      'controller' => $controlador,
+      'action'     => 'clienteSriCambiarEstado',
+    ]);
+
+    $this->addPost('/clientes/sri/guardar', [
+      'controller' => $controlador,
+      'action'     => 'clienteSriGuardar',
+    ]);
   }
 }

@@ -106,5 +106,15 @@ class SeguridadRutas extends \Phalcon\Mvc\Router\Group
             'controller' => $controlador,
             'action'     => 'codificar',
         ]);
+
+        $this->addPost('/usuariosub/acceder', [
+            'controller' => $controlador,
+            'action'     => 'accederUsuarioSub',
+        ]);
+
+        $this->addPut('/usuariosub/modificar/clave', [
+            'controller' => $controlador,
+            'action'     => 'cambiarClaveUsuarioSub',
+        ]);
     }
 }

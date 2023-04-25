@@ -5,14 +5,42 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Launch Built-in web server default",
+      "type": "php",
+      "request": "launch",
+      "runtimeArgs": [
+        "-S", "192.168.100.85:8090",
+        "-t", "${workspaceFolder}/public",
+      ],
+      "port": 9000,
+      "env": {
+        "DBS_HOST":"localhost",
+        "DBS_NAME":"viniapro",
+        "DBS_USER":"postgres",
+        "DBS_PASS":"jmbg",
+        "DBS_PORT":"5435"
+      }
+    },
+    {
       "name": "Built-in web server launch",
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
-        "-S", "192.168.100.220:9090",
-        "-t", "${workspaceFolder}/public",
+        "-dxdebug.mode=debug",
+        "-dxdebug.start_with_request=yes",
+        "-S",
+        "192.168.100.85:8090",
+        "-t",
+        "public"
       ],
+      "program": "",
+      "cwd": "D:\\Desarrollo\\Proyectos\\Pointerp\\pointerp-api",
       "port": 9000,
+      "serverReadyAction": {
+        "pattern": "Development Server \\(http://localhost:([0-9]+)\\) started",
+        "uriFormat": "http://localhost:%s",
+        "action": "openExternally"
+      },
       "env": {
         "DBS_HOST":"localhost",
         "DBS_NAME":"viniapro",

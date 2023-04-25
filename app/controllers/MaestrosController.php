@@ -3,8 +3,10 @@
 
 namespace Pointerp\Controladores;
 
+use DateTime;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
+use Pointerp\Modelos\ClientesSri;
 use Pointerp\Modelos\Registros;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
@@ -47,7 +49,7 @@ class MaestrosController extends ControllerBase  {
     // eñes
     $filtroSP = str_replace('%C3%91' , 'Ñ',$filtroSP);
     $filtroSP = str_replace('%C3%B1' , 'ñ',$filtroSP);
-    $config = Di::getDefault()->getConfig();
+    //$config = Di::getDefault()->getConfig();
     $condicion = '';  
     $ex = $this->subscripcion['id'];
     if ($this->subscripcion['exclusive'] === 1) {
@@ -174,5 +176,105 @@ class MaestrosController extends ControllerBase  {
     $this->response->setContent(json_encode($rows));
     $this->response->send();
   }
+  #endregion
+
+  #region clientes sri
+
+  public function clientesSriListaAction() {
+    $estado = $this->request->getQuery('estado', null, 1);
+    $opciones = [ 'order' => 'nombres' ];
+    if ($estado < 9) {
+      $opciones['conditions'] = "activo = {$estado}";
+    }
+    
+    $rows = ClientesSri::find($opciones);
+    if ($rows->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function clienteSriGuardarAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => $datos->id,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    $ahora = new \DateTime();
+    $cliente = ClientesSri::findFirstById($datos->id);
+    if (!isset($cliente)) {
+      $cliente = new ClientesSri();
+    }
+    $cliente->identificacion      = $datos->identificacion;
+    $cliente->nombres             = $datos->nombres;
+    $cliente->clave_ruc           = $datos->clave_ruc;
+    $cliente->email               = $datos->email;
+    $cliente->clave_email         = $datos->clave_email;
+    $cliente->telefonos           = $datos->telefonos;
+    $cliente->direccion           = $datos->direccion;
+    $cliente->fecha_ingreso       = $datos->fecha_ingreso;
+    $cliente->abono_efectivo      = $datos->abono_efectivo;
+    $cliente->abono_transferencia = $datos->abono_transferencia;
+    $cliente->abono_fecha         = $datos->abono_fecha;
+    $cliente->observaciones       = $datos->observaciones;
+    $cliente->actualizacion       = $ahora->format('Y-m-d H:i:s');
+    $cliente->activo              = $datos->activo;
+    
+    if ($datos->id > 0) {
+      if($cliente->update()) {
+        $ret->res = true;
+      }
+    } else {
+      if($cliente->create()) {
+        $ret->res = true;
+      }
+    }
+    if ($ret->res) {
+      $ret->cid = $cliente->id;
+      $ret->msj = "Cliente guardado exitósamente";
+    } else {
+      $this->response->setStatusCode(500, 'Error');
+      $msj = "No se puedo guardar los datos: " . "\n";
+      foreach ($cliente->getMessages() as $m) {
+        $msj .= $m . "\n";
+      }
+      $ret->msj = $msj;
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function clienteSriCambiarEstadoAction() {
+    $id = $this->request->getQuery('id', null, 0);
+    $activo = $this->request->getQuery('activo', null, 1);
+    $this->response->setStatusCode(422, 'Unprocessable Content');
+    $cliente = ClientesSri::findFirstById($id);
+    if ($cliente) {
+      $cliente->activo = intval($activo);
+      if($cliente->update()) {
+        $msj = "Operacion ejecutada exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(500, 'Error');
+        $msj = "";
+        foreach ($cliente->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el Cliente";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
   #endregion
 }

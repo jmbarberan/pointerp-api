@@ -847,7 +847,7 @@ class NominaController extends ControllerBase {
     $condicion = "empresa_id = " . $emp . " and subscripcion_id = " . $sub;
     $res = [];
     if ($clase < 2) {
-      $condicion .= " AND fecha >= '" . $desde . "' AND fecha <= '" . $hasta . "'";
+      $condicion .= " AND fecha >= '" . $desde . "  0:00:00' AND fecha <= '" . $hasta . "  23:59:59'";
     } else {
       if (strlen($filtro) > 0) {
         if ($clase == 2) {

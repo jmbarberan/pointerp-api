@@ -116,5 +116,15 @@ class SeguridadRutas extends \Phalcon\Mvc\Router\Group
             'controller' => $controlador,
             'action'     => 'cambiarClaveUsuarioSub',
         ]);
+
+        $this->addPut('/usuariosub/recovery/send-mail', [
+            'controller' => $controlador,
+            'action'     => 'recuperarClaveSendMail',
+        ]);
+
+        $this->addGet('/usuariosub/recovery/validar-link', [
+            'controller' => $controlador,
+            'action'     => 'validarPassResetRequest',
+        ]);
     }
 }

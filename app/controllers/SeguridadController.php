@@ -558,16 +558,16 @@ class SeguridadController extends ControllerBase
 
     public function cambiarClaveUsuarioSubAction() {
         $cred = $this->request->getJsonRawBody();
-        $id = $cred->id;
-        $cve = $cred->clave;
-        $usr = UsuariosSub::findFirstById($id);
+        $cve = base64_decode($cred->clave);
+        $usr = UsuariosSub::findFirst([
+            'conditions' => "codigo = '{$cred->codigo}'"
+          ]);
         $res = 'No se ha podido actualizar la contraseña';
         $this->response->setStatusCode(404, 'Not found');
         if ($usr != null) {
             $usr->clave = $cve;
             $usr->reseteado = 0;
-            $res = $usr->save();
-            if ($res != false) {
+            if ($usr->save()) {
                 $res = 'La contraseña se actualizó exitósamente';
                 $this->response->setStatusCode(200, 'Ok');
             } else {
@@ -578,6 +578,76 @@ class SeguridadController extends ControllerBase
         }
         $this->response->setContentType('application/json', 'UTF-8');
         $this->response->setContent(json_encode($res));
+        $this->response->send();
+    }
+
+    public function validarPassResetRequestAction() {
+        $user = $this->request->getQuery('user');
+        $di = Di::getDefault();
+        $ret = (object) [
+            'res' => false,
+            'msj' => 'El link de recuperación es inválido'
+        ];
+        $phql = "SELECT * FROM Pointerp\Modelos\UsuariosSub 
+            WHERE codigo = '%s'";
+        $qry = new Query(sprintf($phql, $user), $di);
+        $rws = $qry->execute();
+        $this->response->setStatusCode(404, 'Not found');
+        if ($rws->count() > 0) {
+            $rus = $rws->getFirst();
+            if ($rus->reseteado == 1) {
+                $this->response->setStatusCode(200, 'Ok');
+                $ret->res = true;
+                $ret->msj = "El link de recuperación es válido";
+            }
+        }
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setContent(json_encode($ret));
+        $this->response->send();
+    }
+
+    public function recuperarClaveSendMailAction() {
+        $ret = (object) [
+            'res' => false,
+            'msj' => 'El email no se encuentra registrado'
+        ];
+        $this->response->setStatusCode(404, 'Not found');
+        $data  = $this->request->getJsonRawBody();
+        $usr = UsuariosSub::findFirst([
+            'conditions' => "email = '{$data->email}'"
+        ]);
+        if ($usr != null) {
+            $usr->reseteado = 1;
+            if ($usr->save()) {
+                $to = $data->email;
+                $subject = "Recuperacion de contraseña";
+                
+                $message  = "<b>Mensaje de Soporte</b>";
+                $message .= "<h1>Recuperar contrase&ntilde;a.</h1>";
+                $message .= '<a href="'. 
+                    "https://clientes.viniapro.com/password/update/{$usr->codigo}" .
+                    '">Haga click aqui para acceder.</a>';
+                
+                $header = "From:support@viniapro.com \r\n";
+                $header .= "MIME-Version: 1.0\r\n";
+                $header .= "Content-type: text/html\r\n";
+                
+                $retval = mail ($to,$subject,$message,$header);
+                if ( $retval == true ) {
+                    $this->response->setStatusCode(202, 'Accepted');
+                    $ret->res = true;
+                    $ret->msj = "El link de recuperación se envió exitósamente a {$data->email}";
+                } else {
+                    $this->response->setStatusCode(500, 'Error');
+                    $ret->msj = "Se ha producido un error al intentar enviar el email";
+                }
+            } else {
+                $this->response->setStatusCode(500, 'Error');
+                $ret->msj = "Intentando enviar el email se ha producido un error";
+            }
+        }
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setContent(json_encode($ret));
         $this->response->send();
     }
 }

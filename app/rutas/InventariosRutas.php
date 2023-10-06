@@ -51,6 +51,10 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'productoGuardar',
     ]);
+    $this->addPost('/productos/replicar', [
+      'controller' => $controlador,
+      'action'     => 'productoReplicar',
+    ]);
     $this->addPut('/productos/{id}/modificar/estado/{estado}', [
       'controller' => $controlador,
       'action'     => 'productoModificarEstado',

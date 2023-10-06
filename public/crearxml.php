@@ -1,8 +1,16 @@
 <?php
 
+require_once ("D:\\Desarrollo\\repositories\\pointerp-api\\vendor\\robrichards\\xmlseclibs\\src\\XMLSecEnc.php");
+require_once ("D:\\Desarrollo\\repositories\\pointerp-api\\vendor\\robrichards\\xmlseclibs\\src\\XMLSecurityDSig.php");
+require_once ("D:\\Desarrollo\\repositories\\pointerp-api\\vendor\\robrichards\\xmlseclibs\\src\\XMLSecurityKey.php");
+require_once ("D:\\Desarrollo\\repositories\\pointerp-api\\vendor\\robrichards\\xmlseclibs\\src\\Utils\\XPath.php");
+
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+//use RobRichards\XMLSecLibs\XMLSecEnc;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 // require_once ("include/variables.php");
- $rucem = '1790263061001';
+ $rucem = '1-';
 
 header('Content-Type: text/html; charset=UTF-8');
 echo '<div style="font-family: Verdana, Arial, Helvetica, sans-serif; font-size: 16pt; color: #000000; margin-bottom: 10px;">';
@@ -10,13 +18,12 @@ echo 'SUNAT. Facturación electrónica ECUADOR.<br>';
 echo '<span style="color: #000099; font-size: 15pt;">Crear archivo .XML SIN FIRMAR correspondiente a la factura electrónica.</span>';
 echo '<hr width="100%"></div>';
 
-
 $xml = new DomDocument('1.0', 'UTF-8');
-//		$xml->standalone         = false;
-		$xml->preserveWhiteSpace = false;
-
-		$Factura = $xml->createElement('Factura');
-		$Factura = $xml->appendChild($Factura);
+$xml->preserveWhiteSpace = false;
+$Factura    = $xml->createElement('factura');
+$Factura->setAttribute("id", "comprobante");
+$Factura->setAttribute("version", "1.0.0");
+$Factura = $xml->appendChild($Factura);
 
 
 // INFORMACION TRIBUTARIA.
@@ -26,11 +33,11 @@ $xml = new DomDocument('1.0', 'UTF-8');
 	$cbc = $infoTributaria->appendChild($cbc);
 	$cbc = $xml->createElement('tipoEmision', '1');
 	$cbc = $infoTributaria->appendChild($cbc);
-	$cbc = $xml->createElement('razonSocial', '1');
+	$cbc = $xml->createElement('razonSocial', 'BARBERAN GUILLEN JOSE MARTIN');
 	$cbc = $infoTributaria->appendChild($cbc);
-	$cbc = $xml->createElement('nombreComercial', '1');
+	$cbc = $xml->createElement('nombreComercial', 'SOFTWARE ECUADOR');
 	$cbc = $infoTributaria->appendChild($cbc);
-	$cbc = $xml->createElement('ruc', '1');
+	$cbc = $xml->createElement('ruc', '0912639069');
 	$cbc = $infoTributaria->appendChild($cbc);
 	$cbc = $xml->createElement('claveAcceso', '1');
 	$cbc = $infoTributaria->appendChild($cbc);
@@ -166,7 +173,48 @@ foreach ($lineas as $d) {
 }
 
 $xml->formatOutput = true;
-$strings_xml       = $xml->saveXML();
+//$facturaXml        = $xml->saveXML();
+
+
+// FIRMAR XADES-BES
+$objDSig = new XMLSecurityDSig();
+
+// Usar canonicalización exclusiva
+$objDSig->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
+
+// Firmar con SHA-256
+$objDSig->addReference(
+    $xml,
+    XMLSecurityDSig::SHA1,
+    ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
+    ['force_uri' => true]
+);
+
+// Cargar el certificado .pfx/.p12
+$certs = [];
+$pkcs12 = file_get_contents('mb.p12');
+openssl_pkcs12_read($pkcs12, $certs, 'Caricatur@55');
+
+// Check if we can get the private key
+if (!empty($certs['pkey'])) {
+    $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, ['type' => 'private']);
+    $objKey->loadKey($certs['pkey'], false);
+    $objDSig->sign($objKey);
+
+    // Add the associated public key to the signature
+    $objDSig->add509Cert($certs['cert'], true, false, ['issuerSerial' => true, 'subjectName' => true]);
+} else {
+    throw new Exception('Could not get the private key.');
+}
+
+// Append the signature
+$objDSig->appendSignature($xml->getElementsByTagName('factura')->item(0));
+
+// Additional XAdES-BES properties can be added at this point
+
+// Save or output the signed XML
+//echo $xml->saveXML();
+
 
 $xml->save($rucem.'74902020320953.xml');
 chmod($rucem.'74902020320953.xml', 0777);

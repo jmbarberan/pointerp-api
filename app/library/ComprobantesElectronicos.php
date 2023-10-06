@@ -1,7 +1,7 @@
 <?php
 
-include APP_PATH . '/library/FirmaElectronica.php';
-use sasco\LibreDTE\FirmaElectronica;
+/*include APP_PATH . '/library/FirmaElectronica.php';
+use sasco\LibreDTE\FirmaElectronica;*/
 
 /*include APP_PATH . '/library/Exception/XmlSignatureValidatorException.php';
 include APP_PATH . '/library/xmlsign/Utils/XPath.php';
@@ -308,12 +308,6 @@ class ComprobantesElectronicos {
   }
 
   static function firmarXml($xml, $pfx, $pass) {
-    $firma_config = [ 'file' => $pfx, 'pass' => $pass ];
-    $fe = new FirmaElectronica($firma_config);
-    return $fe->signXML($xml, $reference = '#comprobante', $tag = false, $xmlns_xsi = [
-      'http://www.w3.org/2000/09/xmldsig#',
-      'ds'
-    ]);
     //return $fe->getData()['serialNumber'];
     //$rutapfx = __DIR__ . '/public/index.php'
     /*$rutapfx = $_SERVER["DOCUMENT_ROOT"] .DIRECTORY_SEPARATOR.
@@ -417,7 +411,7 @@ class ComprobantesElectronicos {
         $KeyInfo .= '\n</ds:KeyValue>';
     $KeyInfo .= '\n</ds:KeyInfo>';    
     $KeyInfo_para_hash = str_replace('<ds:KeyInfo', '<ds:KeyInfo ' + $xmlns, $KeyInfo);
-    $sha1_certificado = base64_encode($KeyInfxades_bes .= $KeyInfo_para_hash);
+    $sha1_certificado = base64_encode($KeyInfo .= $KeyInfo_para_hash);
 
     $SignedInfo = '';
     $SignedInfo .= '<ds:SignedInfo Id="Signature-SignedInfo' . $SignedInfo_number . '">';
@@ -479,7 +473,7 @@ class ComprobantesElectronicos {
     $url = $p->url;
     try {
       $client = new SoapClient($url, [ "trace" => 1 ] );
-      $result = $client->ResolveIP( [ "ipAddress" => $argv[1], "licenseKey" => "0" ] );
+      $result = $client->ResolveIP( [ "ipAddress" => $url, "licenseKey" => "0" ] );
       print_r($result);
     } catch ( SoapFault $e ) {
       echo $e->getMessage();      
@@ -520,8 +514,6 @@ class ComprobantesElectronicos {
     }
     
     $xml = self::crearXmlFactura($comprobante, $tipoDatos, $contribuyente);
-    /*$cert = APP_PATH . '\files\sign\CERT_' . '0912639069001' . '.cer';
-    $pem  = APP_PATH . '\files\sign\KEY_' . '0912639069001' . '.pem';*/
     $frm = self::firmarXml($xml, $rutapfx, $pass);
     file_put_contents('fa_' . strval($comprobante->Numero) . '.xml', "\xEF\xBB\xBF".  $frm);
     

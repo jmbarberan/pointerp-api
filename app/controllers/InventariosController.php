@@ -5,6 +5,7 @@ namespace Pointerp\Controladores;
 use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
+use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Productos;
 use Pointerp\Modelos\Maestros\ProductosPrecios;
 use Pointerp\Modelos\Maestros\ProductosImposiciones;
@@ -158,15 +159,14 @@ class InventariosController extends ControllerBase  {
       ]);
     }
     
-    if ($res->count() <= 0 || $res === null) {
+    if ($res === null || $res->count() <= 0 ) {
       $filtro = str_replace('%20', ' ', $filtro);
       $filtro = str_replace('%C3%91' , 'Ñ',$filtro);
       $filtro = str_replace('%C3%B1' , 'ñ',$filtro);
-      if ($buscaExt == 0) {
-        $filtro .= '%';
-      } else {
-        $filtroSP = str_replace('  ', ' ',trim($filtro));
-        $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+      $filtroSP = str_replace('  ', ' ',trim($filtro));
+      $filtro = str_replace(' ' , '%',$filtroSP) . '%';
+      if ($buscaExt == 1) {
+        $filtro = '%' . $filtro;
       }
       $condicion .= "Nombre like '" . $filtro . "'";
       if ($eliminados == 0) {
@@ -414,6 +414,134 @@ class InventariosController extends ControllerBase  {
           $ret->cid = 0;
           $ret->msj = $msj;
         }
+      }
+    } catch (Exception $e) {
+      $this->response->setStatusCode(500, 'Error');  
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $e->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function productoReplicarAction() {
+    try {
+      
+      $body = $this->request->getJsonRawBody();
+      $ret = (object) [
+        'res' => false,
+        'cid' => $body->id,
+        'msj' => 'No se pudo procesar el producto'
+      ];
+
+      $empresaId = $body->empresa;
+      if ($body->id > 0) {
+        $datos = Productos::findFirstById($body->id);
+        if ($datos != null) {
+          if ($empresaId <= 0) {
+            $emp = Empresas::findFirst([
+              'conditions' => "Id != " . $datos->EmpresaId
+            ]);
+            if ($emp != null) {
+              $empresaId = $emp->Id;
+            } else {
+              $empresaId = 1;
+            }
+          }
+
+          if ($empresaId > 0) {
+            $newcod = $datos->Codigo;
+            if (strlen($datos->Codigo) <= 0) {
+              $di = Di::getDefault();
+              $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Productos 
+                  WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+              $qry = new Query($phql, $di);
+              $rws = $qry->execute();
+              if ($rws->count() === 1) {
+                $rmax = $rws->getFirst();
+                try {
+                  $num = intval($rmax['maxcod']);
+                } catch (Exception $e) {
+                  //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
+                  $num = 0;
+                }
+              }
+              
+              if ($num == 0)
+                $num = 1000;
+              else
+                $num += 1;
+              $newcod = strval($num);
+            }
+
+            $prd = new Productos();
+            $prd->Codigo = $newcod; //strval($num);
+            $prd->Nombre = mb_convert_encoding($datos->Nombre, "UTF-8", mb_detect_encoding($datos->Nombre));
+            $prd->Barcode = $datos->Barcode;
+            $prd->Grupo = $datos->Grupo;
+            $prd->Descripcion = $datos->Descripcion;
+            $prd->Medida = $datos->Medida;
+            $prd->Tipo = $datos->Tipo;
+            $prd->UltimoCosto = $datos->UltimoCosto;
+            $prd->EmpresaId = $empresaId;
+            $prd->Exitencia = $datos->Exitencia;
+            $prd->Adicional = $datos->Adicional;
+            $prd->EmbalajeTipo = $datos->EmbalajeTipo;
+            $prd->EmbalejeCantidad = $datos->EmbalejeCantidad;
+            $prd->EmbalajeUnidad = $datos->EmbalajeUnidad;
+            $prd->EmbalajeVolumen = $datos->EmbalajeVolumen;
+            $prd->EspecieId = $datos->EspecieId;
+            $prd->Marca = $datos->Marca;
+            $prd->Precio = $datos->Precio;
+            $prd->PrecioOrigen = $datos->PrecioOrigen;
+            $prd->Estado = 0;
+            if ($prd->create()) {
+              // Crear lineas de precios nuevas e imposiciones
+              $ret->res = true;
+              $ret->cid = $prd->Id;
+              $ret->msj = "Se registrara las imposiciones";
+              // Crear imposiciones
+              foreach ($datos->relImposiciones as $mi) {
+                $ins = new ProductosImposiciones();
+                $ins->ProductoId = $prd->Id;
+                $ins->ImpuestoId = $mi->ImpuestoId;
+                $ins->create();
+              }
+              $ret->msj = "Se registrara los precios";
+              // Crear precios
+              foreach ($datos->relPrecios as $pi) {
+                if ($pi->Precio > 0) {
+                  $insp = new ProductosPrecios();
+                  $insp->ProductoId = $prd->Id;
+                  $insp->Precio = $pi->Precio;
+                  $insp->MinimoCondicion = $pi->MinimoCondicion;
+                  $insp->VolumenCondicion = $pi->VolumenCondicion;
+                  $insp->create();
+                }
+                
+              }
+              $ret->msj = "Se replico correctamente el producto";
+              $this->response->setStatusCode(201, 'Created');  
+            } else {
+              $this->response->setStatusCode(500, 'Error');  
+              $msj = "No se pudo replicar el producto: " . "\n";
+              foreach ($prd->getMessages() as $m) {
+                $msj .= $m . "\n";
+              }
+              $ret->res = false;
+              $ret->cid = 0;
+              $ret->msj = $msj;
+            }
+          } else {
+            $ret->msj = "La empresa no es válida";
+          }
+        } else {
+          $ret->msj = "No se encontró el producto a replicar";
+        }
+      } else {
+        $ret->msj = "El producto no es válido";
       }
     } catch (Exception $e) {
       $this->response->setStatusCode(500, 'Error');  

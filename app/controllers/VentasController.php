@@ -2,6 +2,7 @@
 
 namespace Pointerp\Controladores;
 
+use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Inventarios\Kardex;
@@ -13,6 +14,7 @@ use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Cxc\Comprobantes;
 use Pointerp\Modelos\Cxc\ComprobanteItems;
 use Pointerp\Modelos\Cxc\ComprobanteDocumentos;
+use Pointerp\Modelos\Maestros\Clientes;
 
 class VentasController extends ControllerBase  {
 
@@ -110,6 +112,29 @@ class VentasController extends ControllerBase  {
       $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
       $datos->Fecha = str_replace('Z', '', $datos->Fecha); 
       // Si el cliente id es 0 crearlo
+      $cliente = $datos->relCliente;
+      if ($cliente->Id == 0) {
+        $nuevoCliente = new Clientes();
+        $nuevoCliente->generarNuevoCodigo($cliente->EmpresaId);
+        $nuevoCliente->EmpresaId = $cliente->EmpresaId;
+        $nuevoCliente->Identificacion = $cliente->Identificacion;
+        $nuevoCliente->Nombres = $cliente->Nombres;
+        $nuevoCliente->Direccion = $cliente->Direccion;
+        $nuevoCliente->Telefonos = $cliente->Telefonos;
+        $nuevoCliente->Email = $cliente->Email;
+        $nuevoCliente->IdentificacionTipo = $cliente->IdentificacionTipo;
+        $nuevoCliente->Cupo = 0;
+        $nuevoCliente->Estado = 0;
+        if ($nuevoCliente->create()) {
+          $datos->ClienteId = $nuevoCliente->Id;
+        } else {
+          $msj = "";
+          foreach ($nuevoCliente->getMessages() as $m) {
+            $msj .= $m . " ";
+          }
+          echo $msj;
+        }
+      }
       if ($datos->Id > 0) {
         // Traer movimiento por id y acualizar
         $ven = Ventas::findFirstById($datos->id);
@@ -226,11 +251,25 @@ class VentasController extends ControllerBase  {
           $ret->msj = $msj;
         }
       } else {
-        // Crear factura nuevo
-        $ret = $this->guardarVentaNueva($datos, 0, false);
-        if ($ret->res) {
-          $this->response->setStatusCode(201, 'Ok');
+        // Crear factura nueva
+        $vendoble = false;
+        try {
+          $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
+            where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$datos->Fecha}', 1, 19)";
+          $qry = new Query($cmd, Di::getDefault());
+          $rws = $qry->execute();
+          $vendoble = $rws->count() > 0;
         }
+        catch(Exception $ex) {
+          $ret->msj = $ex;
+        }
+
+        if (!$vendoble) {
+          $ret = $this->guardarVentaNueva($datos, 0, false);
+          if ($ret->res) {
+            $this->response->setStatusCode(201, 'Ok');
+          }
+        }  
       }
     } catch (\Exception $e) {
       $this->response->setStatusCode(500, 'Error');
@@ -246,71 +285,94 @@ class VentasController extends ControllerBase  {
     $caja = $this->dispatcher->getParam('caja');
     $usuario = $this->dispatcher->getParam('usuario');
     $datos = $this->request->getJsonRawBody();
-    $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
-    $ret = $this->guardarVentaNueva($datos, $cobrado, false);
-    if ($ret->res) {
-      $vta = $ret->ven;
-      $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
-      $cobro = new Comprobantes();
-      $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
-      $cobro->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
-      $cobro->Total = $cobrado;
-      $cobro->SucursalId = $datos->SucursalId;
-      $cobro->Especie = 0;
-      $cobro->Numero = $cobroNum;
-      $cobro->UsuarioId = $usuario;
-      $cobro->Estado = 0;
-      if ($cobro->create()) {
-        $doc = new ComprobanteDocumentos();
-        if ($vta->Tipo == 47) { // (int)EntidadesEnum.EnPedido
-          $doc->Concepto = 52; // (int)EntidadesEnum.EnAbonosEfectivo
-          $doc->Notas = "Abono a pedido reservado";
-        } else {
-          $doc->Notas = "Cobro de venta de contado";
-        }
-        $doc->ComprobanteId = $cobro->Id;
-        $doc->Origen = $vta->Tipo;
-        $doc->Referencia = $vta->Id;
-        $doc->Rebajas = $cobrado;
-        $doc->Recargos = 0;
-        $doc->Soporte = 0;
-        if($doc->create()) {
-          $cobitem = new ComprobanteItems();
-          $cobitem->ComprobanteId = $cobro->Id;
-          $cobitem->Numero = $caja; // id de la caja
-          $cobitem->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
-          $cobitem->Cuenta = " ";
-          $cobitem->Autorizacion = " ";
-          $cobitem->Nombres = " ";
-          $cobitem->Codigo = " ";
-          $cobitem->Valor = $cobrado;
-          $cobitem->Descripcion = "";
-          $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
-          if(!$cobitem->create()) {
-            $msj = "No se pudo crear el nuevo Item: " . "\n";
-            foreach ($cobitem->getMessages() as $m) {
+    $ret = (object) [
+      'res' => false,
+      'cid' => 0,
+      'ven' => null,
+      'msj' => 'Error al crear',
+      'num' => 0
+    ];
+    
+    $vendoble = false;
+    try {
+      $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
+        where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$datos->Fecha}', 1, 19)";
+      $qry = new Query($cmd, Di::getDefault());
+      $rws = $qry->execute();
+      $vendoble = $rws->count() > 0;
+    }
+    catch(Exception $ex) {
+      $ret->msj = $ex;
+    }
+
+    if (!$vendoble) {
+      $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
+      $ret = $this->guardarVentaNueva($datos, $cobrado, false);
+      if ($ret->res) {
+        $vta = $ret->ven;
+        $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
+        $cobro = new Comprobantes();
+        $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
+        $cobro->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
+        $cobro->Total = $cobrado;
+        $cobro->SucursalId = $datos->SucursalId;
+        $cobro->Especie = 0;
+        $cobro->Numero = $cobroNum;
+        $cobro->UsuarioId = $usuario;
+        $cobro->Estado = 0;
+        if ($cobro->create()) {
+          $doc = new ComprobanteDocumentos();
+          if ($vta->Tipo == 47) { // (int)EntidadesEnum.EnPedido
+            $doc->Concepto = 52; // (int)EntidadesEnum.EnAbonosEfectivo
+            $doc->Notas = "Abono a pedido reservado";
+          } else {
+            $doc->Notas = "Cobro de venta de contado";
+          }
+          $doc->ComprobanteId = $cobro->Id;
+          $doc->Origen = $vta->Tipo;
+          $doc->Referencia = $vta->Id;
+          $doc->Rebajas = $cobrado;
+          $doc->Recargos = 0;
+          $doc->Soporte = 0;
+          if($doc->create()) {
+            $cobitem = new ComprobanteItems();
+            $cobitem->ComprobanteId = $cobro->Id;
+            $cobitem->Numero = $caja; // id de la caja
+            $cobitem->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
+            $cobitem->Cuenta = " ";
+            $cobitem->Autorizacion = " ";
+            $cobitem->Nombres = " ";
+            $cobitem->Codigo = " ";
+            $cobitem->Valor = $cobrado;
+            $cobitem->Descripcion = "";
+            $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
+            if(!$cobitem->create()) {
+              $msj = "No se pudo crear el nuevo Item: " . "\n";
+              foreach ($cobitem->getMessages() as $m) {
+                $msj .= $m . "\n";
+              }
+              $ret->msj = $msj;
+            }
+          } else {
+            $msj = "No se pudo crear el nuevo Documento: " . "\n";
+            foreach ($doc->getMessages() as $m) {
               $msj .= $m . "\n";
             }
             $ret->msj = $msj;
           }
         } else {
-          $msj = "No se pudo crear el nuevo Documento: " . "\n";
-          foreach ($doc->getMessages() as $m) {
+          $msj = "No se pudo crear el nuevo cobro: " . "\n";
+          foreach ($cobro->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->msj = $msj;
         }
       } else {
-        $msj = "No se pudo crear el nuevo cobro: " . "\n";
-        foreach ($cobro->getMessages() as $m) {
-          $msj .= $m . "\n";
-        }
-        $ret->msj = $msj;
+        $ret->res = true;
+        $ret->msj = "Se creo correctamente el comprobante, pero no se pudo registrar el cobro";
       }
-    } else {
-      $ret->res = true;
-      $ret->msj = "Se creo correctamente el comprobante, pero no se pudo registrar el cobro";
     }
+    
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($ret));
     $this->response->send();
@@ -374,14 +436,14 @@ class VentasController extends ControllerBase  {
   }
 
   public function ventaAutorizarAction() {
-    $db = DI::getDefault()->getDb();
-    $id = $this->dispatcher->getParam('id');    
+    //$db = DI::getDefault()->getDb();
+    $id = $this->dispatcher->getParam('id');
     $ven = Ventas::findFirstById($id);
     if ($ven != false) {
       require_once APP_PATH . '/library/ComprobantesElectronicos.php';
       //$ce = new \ComprobantesElectronicos();
       try {
-        $msj = \ComprobantesElectronicos::procesarFactura($ven, $db);
+        //$msj = \ComprobantesElectronicos::procesarFactura($ven, $db);
         //$msj = "Procesado correctamente";
       } catch (\Exception $e) {
         $this->response->setStatusCode(500, 'Error');  
@@ -484,7 +546,7 @@ class VentasController extends ControllerBase  {
         $ins->Descuento = $mi->Descuento;
         $ins->Adicional = $mi->Adicional;
         $ins->Despachado = $mi->Despachado;
-        if ($mi->Codigo) {
+        if (isset($mi->Codigo)) {
           $ins->Codigo = $mi->Codigo;
         }
         $ins->Costo = $mi->Costo;

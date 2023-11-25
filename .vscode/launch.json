@@ -9,7 +9,7 @@
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
-        "-S", "192.168.100.85:8090",
+        "-S", "192.168.100.220:9091",
         "-t", "${workspaceFolder}/public",
       ],
       "port": 9000,
@@ -18,7 +18,8 @@
         "DBS_NAME":"viniapro",
         "DBS_USER":"postgres",
         "DBS_PASS":"jmbg",
-        "DBS_PORT":"5435"
+        "DBS_PORT":"5432",
+        "DBS_SCHEME":"subscripciones"
       }
     },
     {
@@ -46,7 +47,7 @@
         "DBS_NAME":"viniapro",
         "DBS_USER":"postgres",
         "DBS_PASS":"jmbg",
-        "DBS_PORT":"5435"
+        "DBS_PORT":"5432"
       }
     }
   ]

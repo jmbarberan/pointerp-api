@@ -11,6 +11,7 @@ use Pointerp\Rutas\NominaRutas;
 use Pointerp\Rutas\CorsRutas;
 
 $router = $di->getRouter();
+$router->removeExtraSlashes(true);
 $router->setDefaultNamespace('Pointerp\Controladores');
 
 $router->mount(new SeguridadRutas());

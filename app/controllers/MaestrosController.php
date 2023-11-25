@@ -4,10 +4,7 @@
 namespace Pointerp\Controladores;
 
 use DateTime;
-use Phalcon\Di;
-use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\ClientesSri;
-use Pointerp\Modelos\Registros;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Maestros\Proveedores;

@@ -1,0 +1,13 @@
+AddDefaultCharset UTF-8
+SetEnv DBS_HOST 127.0.0.1
+SetEnv DBS_USER poinspve_vinia
+SetEnv DBS_PASS Canic@55ng
+SetEnv DBS_NAME poinspve_viniapro
+SetEnv DBS_PORT 5432
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ index.php?_url=/$1 [QSA,L]
+</IfModule>

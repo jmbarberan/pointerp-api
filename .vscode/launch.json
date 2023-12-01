@@ -9,7 +9,7 @@
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
-        "-S", "192.168.100.220:9091",
+        "-S", "localhost:9091",
         "-t", "${workspaceFolder}/public",
       ],
       "port": 9000,

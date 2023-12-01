@@ -3,7 +3,6 @@
 
 namespace Pointerp\Controladores;
 
-use DateTime;
 use Pointerp\Modelos\ClientesSri;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
@@ -178,12 +177,16 @@ class MaestrosController extends ControllerBase  {
   #region clientes sri
 
   public function clientesSriListaAction() {
-    $estado = $this->request->getQuery('estado', null, 1);
+    $estado     = $this->request->getQuery('estado', null, 1);
+    $filtro     = $this->request->getQuery('filtro');
+    $extendido  = $this->request->getQuery('extendido');
+    if ($extendido) $filtro = '%' . $filtro;
+    $condiciones = "nombres like '{$filtro}%'";
     $opciones = [ 'order' => 'nombres' ];
     if ($estado < 9) {
-      $opciones['conditions'] = "activo = {$estado}";
+      $condiciones .= " and activo = {$estado}";
     }
-    
+    $opciones['conditions'] = $condiciones;
     $rows = ClientesSri::find($opciones);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
@@ -219,10 +222,10 @@ class MaestrosController extends ControllerBase  {
     $cliente->abono_transferencia = $datos->abono_transferencia;
     $cliente->abono_fecha         = $datos->abono_fecha;
     $cliente->observaciones       = $datos->observaciones;
-    $cliente->actualizacion       = $ahora->format('Y-m-d H:i:s');
     $cliente->activo              = $datos->activo;
     
     if ($datos->id > 0) {
+      $cliente->actualizacion = $ahora->format('Y-m-d H:i:s');
       if($cliente->update()) {
         $ret->res = true;
       }
@@ -248,28 +251,24 @@ class MaestrosController extends ControllerBase  {
   }
 
   public function clienteSriCambiarEstadoAction() {
-    $id = $this->request->getQuery('id', null, 0);
-    $activo = $this->request->getQuery('activo', null, 1);
+    $id     = $this->request->getQuery('id', null, 0);
+    $activo = $this->request->getQuery('activo', null, true);
     $this->response->setStatusCode(422, 'Unprocessable Content');
     $cliente = ClientesSri::findFirstById($id);
     if ($cliente) {
-      $cliente->activo = intval($activo);
+      $cliente->activo = ($activo === "true" ? 1 : 0);
       if($cliente->update()) {
         $msj = "Operacion ejecutada exitosamente";
         $this->response->setStatusCode(200, 'Ok');
       } else {
-        $this->response->setStatusCode(500, 'Error');
-        $msj = "";
-        foreach ($cliente->getMessages() as $m) {
-          $msj .= $m . "\n";
-        }
+        $msj = "Error al intentar eliminar el cliente";
       }
     } else {
       $msj = "No se encontro el Cliente";
       $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($msj));
+    $this->response->setContent(json_encode(boolval($activo)));
     $this->response->send();
   }
 

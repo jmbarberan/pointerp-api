@@ -106,7 +106,7 @@ class InventariosController extends ControllerBase  {
     "p.Medida, p.Tipo, p.UltimoCosto, p.EmpresaId, p.Adicional," .
     "p.EmbalejeCantidad, p.PrecioOrigen, p.Estado," .
     "i.Id as impId, ImpuestoId, i.ProductoId," .
-    "m.Id as ivaId, m.Nombre as ivaNombre, m.Porcentaje, m.Actualizado " .
+    "m.Id as ivaId, m.Nombre as ivaNombre, m.Porcentaje, m.Actualizado, p.EmbalajeVolumen " .
     "from Pointerp\Modelos\Maestros\ProductosPrecios r " .
     "right join Pointerp\Modelos\Maestros\Productos p on r.ProductoId = p.Id " .
     "left join Pointerp\Modelos\Maestros\ProductosImposiciones i on i.ProductoId = p.Id " .

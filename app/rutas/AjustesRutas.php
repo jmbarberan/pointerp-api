@@ -18,6 +18,10 @@ class AjustesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'clavesPorTabla',
     ]);
+    $this->addGet('/tablas/{tabla}/registro/{indice}', [
+      'controller' => $controlador,
+      'action'     => 'clavePorTablaIndice',
+    ]);
     $this->addGet('/sucursales/empresa/{emp}', [
       'controller' => $controlador,
       'action'     => 'sucursalesPorEmpresa',

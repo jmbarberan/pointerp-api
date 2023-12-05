@@ -51,6 +51,25 @@ class AjustesController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function clavePorTablaIndiceAction() {
+    $this->view->disable();
+    $tabla = $this->dispatcher->getParam('tabla');
+    $indice = $this->dispatcher->getParam('indice');
+    $res = Registros::findFirst([
+        'conditions' => 'TablaId = :tid: and Indice = :ind:',
+        'bind' => ['tid' => $tabla, 'ind' => $indice]
+    ]);
+
+    if ($res->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
   public function sucursalesPorEmpresaAction() {
     $this->view->disable();
     $emp = $this->dispatcher->getParam('emp');

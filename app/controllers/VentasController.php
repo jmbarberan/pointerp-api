@@ -112,27 +112,29 @@ class VentasController extends ControllerBase  {
       $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
       $datos->Fecha = str_replace('Z', '', $datos->Fecha); 
       // Si el cliente id es 0 crearlo
-      $cliente = $datos->relCliente;
-      if ($cliente->Id == 0) {
-        $nuevoCliente = new Clientes();
-        $nuevoCliente->generarNuevoCodigo($cliente->EmpresaId);
-        $nuevoCliente->EmpresaId = $cliente->EmpresaId;
-        $nuevoCliente->Identificacion = $cliente->Identificacion;
-        $nuevoCliente->Nombres = $cliente->Nombres;
-        $nuevoCliente->Direccion = $cliente->Direccion;
-        $nuevoCliente->Telefonos = $cliente->Telefonos;
-        $nuevoCliente->Email = $cliente->Email;
-        $nuevoCliente->IdentificacionTipo = $cliente->IdentificacionTipo;
-        $nuevoCliente->Cupo = 0;
-        $nuevoCliente->Estado = 0;
-        if ($nuevoCliente->create()) {
-          $datos->ClienteId = $nuevoCliente->Id;
-        } else {
-          $msj = "";
-          foreach ($nuevoCliente->getMessages() as $m) {
-            $msj .= $m . " ";
+      if (isset($datos->relCliente)) {
+        $cliente = $datos->relCliente;
+        if ($datos->relCliente->Id == 0) {
+          $nuevoCliente = new Clientes();
+          $nuevoCliente->generarNuevoCodigo($cliente->EmpresaId);
+          $nuevoCliente->EmpresaId = $cliente->EmpresaId;
+          $nuevoCliente->Identificacion = $cliente->Identificacion;
+          $nuevoCliente->Nombres = $cliente->Nombres;
+          $nuevoCliente->Direccion = $cliente->Direccion;
+          $nuevoCliente->Telefonos = $cliente->Telefonos;
+          $nuevoCliente->Email = $cliente->Email;
+          $nuevoCliente->IdentificacionTipo = $cliente->IdentificacionTipo;
+          $nuevoCliente->Cupo = 0;
+          $nuevoCliente->Estado = 0;
+          if ($nuevoCliente->create()) {
+            $datos->ClienteId = $nuevoCliente->Id;
+          } else {
+            $msj = "";
+            foreach ($nuevoCliente->getMessages() as $m) {
+              $msj .= $m . " ";
+            }
+            echo $msj;
           }
-          echo $msj;
         }
       }
       if ($datos->Id > 0) {
@@ -254,8 +256,9 @@ class VentasController extends ControllerBase  {
         // Crear factura nueva
         $vendoble = false;
         try {
+          $fechaComparar = str_replace("T", " ", $datos->Fecha);
           $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
-            where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$datos->Fecha}', 1, 19)";
+            where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";
           $qry = new Query($cmd, Di::getDefault());
           $rws = $qry->execute();
           $vendoble = $rws->count() > 0;
@@ -269,13 +272,34 @@ class VentasController extends ControllerBase  {
           if ($ret->res) {
             $this->response->setStatusCode(201, 'Ok');
           }
-        }  
+        } else {
+          $ret->msj = "El documento ya se encuentra registrado";
+        } 
       }
     } catch (\Exception $e) {
       $this->response->setStatusCode(500, 'Error');
       $ret->cid = 0;
       $ret->msj = $e->getMessage();
     }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function ventasListaGuardarAction() {
+    $ret = (object) [
+      'res' => true,
+      'cid' => 0,
+      'ven' => null,
+      'msj' => 'Ventas sincronizadas correctamente',
+      'num' => 0
+    ];
+    $ventas = $this->request->getJsonRawBody();
+
+    foreach ($ventas as $venta) {
+      $this->guardarVentaNueva($venta, 0, false);  
+    }
+    
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($ret));
     $this->response->send();
@@ -295,8 +319,9 @@ class VentasController extends ControllerBase  {
     
     $vendoble = false;
     try {
+      $fechaComparar = str_replace("T", " ", $datos->Fecha);
       $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
-        where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$datos->Fecha}', 1, 19)";
+        where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";
       $qry = new Query($cmd, Di::getDefault());
       $rws = $qry->execute();
       $vendoble = $rws->count() > 0;
@@ -371,6 +396,8 @@ class VentasController extends ControllerBase  {
         $ret->res = true;
         $ret->msj = "Se creo correctamente el comprobante, pero no se pudo registrar el cobro";
       }
+    } else {
+      $ret->msj = "El documento ya se encuentra registrado";
     }
     
     $this->response->setContentType('application/json', 'UTF-8');
@@ -469,6 +496,36 @@ class VentasController extends ControllerBase  {
     $this->response->send();
     echo var_dump($msj);
   }
+
+  public function ventaActualizarEstadoCEAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ven = Ventas::findFirstById($datos->Id);
+    if ($ven != false) {
+      $ven->CEClaveAcceso = $datos->CEClaveAcceso;
+      $ven->CEAutorizacion = $datos->CEAutorizacion;
+      $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
+      $ven->CEContenido = $datos->CEContenido;
+      $ven->CERespuestaId = $datos->CERespuestaId;
+      $ven->CERespuestaTipo = $datos->CERespuestaTipo;
+      $ven->CERespuestaMsj = $datos->CERespuestaMsj;
+      if($ven->update()) {
+        $msj = "La operacion se ejecuto exitosamente";
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Error');
+        $msj = "No se puede actualizar los datos: " . "\n";
+        foreach ($ven->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+      }
+    } else {
+      $msj = "No se encontro el registro";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
   #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {
@@ -494,83 +551,142 @@ class VentasController extends ControllerBase  {
       'num' => 0
     ];
 
-    $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
-    $ven = new Ventas();
-    /*if (property_exists($datos, 'UCodigo'))
-      $ven->Codigo = $datos->UCodigo;*/
-    $ven->Numero = $num;
-    $ven->Tipo = $datos->Tipo;
-    $ven->Fecha = $datos->Fecha;
-    $ven->SucursalId = $datos->SucursalId;
-    $ven->BodegaId = $datos->BodegaId;
-    $ven->Plazo = $datos->Plazo;
-    $ven->ClienteId = $datos->ClienteId;
-    $ven->VendedorId = $datos->VendedorId;
-    $ven->Notas = $datos->Notas;
-    $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
-    $ven->PorcentajeVenta = $datos->PorcentajeVenta;
-    $ven->Subtotal = $datos->Subtotal;
-    $ven->SubtotalEx = $datos->SubtotalEx;
-    $ven->Descuento = $datos->Descuento;
-    $ven->Recargo = $datos->Recargo;
-    $ven->Flete = $datos->Flete;
-    $ven->Impuestos = $datos->Impuestos;
-    $ven->Abonos = $cobrado;
-    $ven->AbonosPf = $datos->AbonosPf;
-    $ven->Estado = $cobrado > 0 ? 1 : $datos->Estado;
-    $ven->Especie = $datos->Especie; // receta, servicio medico
-    $ven->CEClaveAcceso = $datos->CEClaveAcceso;
-    $ven->CEAutorizacion = $datos->CEAutorizacion;
-    $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
-    $ven->CEContenido = $datos->CEContenido;
-    $ven->CEEtapa = $datos->CEEtapa;
-    $ven->CERespuestaId = $datos->CERespuestaId;
-    $ven->CERespuestaTipo = $datos->CERespuestaTipo;
-    $ven->CERespuestaMsj = $datos->CERespuestaMsj;
-    $ven->Comprobante = $datos->Comprobante;
-    $ven->Contado = $cobrado > 0 ? 1 : 0;
-    $ven->Operador = $datos->Operador;
-    if ($ven->create()) {
-      $ret->res = true;
-      $ret->cid = $ven->Id;
-      $ret->num = $ven->Numero;
-      $ret->msj = "Se registro correctamente la nueva transaccion";  
-      // Crear items
-      foreach ($datos->relItems as $mi) {
-        $ins = new VentasItems();
-        $ins->VentaId = $ven->Id;
-        $ins->ProductoId = $mi->ProductoId;
-        $ins->Bodega = $mi->Bodega;
-        $ins->Cantidad = $mi->Cantidad;
-        $ins->Precio = $mi->Precio;
-        $ins->Descuento = $mi->Descuento;
-        $ins->Adicional = $mi->Adicional;
-        $ins->Despachado = $mi->Despachado;
-        if (isset($mi->Codigo)) {
-          $ins->Codigo = $mi->Codigo;
+    if ($datos->ClienteId <= 0) {
+      $resp = $this->crearCliente($datos->ClienteNav);
+      if (strlen($resp) > 0) {
+        $ret->msj = "Error al crear el cliente: {$resp}";
+      } else {
+        $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
+        $ven = new Ventas();
+        $ven->Numero = $num;
+        $ven->Tipo = $datos->Tipo;
+        $ven->Fecha = $datos->Fecha;
+        $ven->SucursalId = $datos->SucursalId;
+        $ven->BodegaId = $datos->BodegaId;
+        $ven->Plazo = $datos->Plazo;
+        $ven->ClienteId = $datos->ClienteId;
+        $ven->VendedorId = $datos->VendedorId;
+        $ven->Notas = $datos->Notas;
+        $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
+        $ven->PorcentajeVenta = $datos->PorcentajeVenta;
+        $ven->Subtotal = $datos->Subtotal;
+        $ven->SubtotalEx = $datos->SubtotalEx;
+        $ven->Descuento = $datos->Descuento;
+        $ven->Recargo = $datos->Recargo;
+        $ven->Flete = $datos->Flete;
+        $ven->Impuestos = $datos->Impuestos;
+        $ven->Abonos = $cobrado;
+        $ven->AbonosPf = $datos->AbonosPf;
+        $ven->Estado = $cobrado > 0 ? 1 : $datos->Estado;
+        $ven->Especie = $datos->Especie; // receta, servicio medico
+        $ven->CEClaveAcceso = $datos->CEClaveAcceso;
+        $ven->CEAutorizacion = $datos->CEAutorizacion;
+        $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
+        $ven->CEContenido = $datos->CEContenido;
+        $ven->CEEtapa = $datos->CEEtapa;
+        $ven->CERespuestaId = $datos->CERespuestaId;
+        $ven->CERespuestaTipo = $datos->CERespuestaTipo;
+        $ven->CERespuestaMsj = $datos->CERespuestaMsj;
+        $ven->Comprobante = $datos->Comprobante;
+        $ven->Contado = $cobrado > 0 ? 1 : 0;
+        $ven->Operador = $datos->Operador;
+        if ($ven->create()) {
+          $ret->res = true;
+          $ret->cid = $ven->Id;
+          $ret->num = $ven->Numero;
+          $ret->msj = "Se registro correctamente la nueva transaccion";  
+          // Crear items
+          foreach ($datos->relItems as $mi) {
+            $ins = new VentasItems();
+            $ins->VentaId = $ven->Id;
+            $ins->ProductoId = $mi->ProductoId;
+            $ins->Bodega = $mi->Bodega;
+            $ins->Cantidad = $mi->Cantidad;
+            $ins->Precio = $mi->Precio;
+            $ins->Descuento = $mi->Descuento;
+            $ins->Adicional = $mi->Adicional;
+            $ins->Despachado = $mi->Despachado;
+            if (isset($mi->Codigo)) {
+              $ins->Codigo = $mi->Codigo;
+            }
+            $ins->Costo = $mi->Costo;
+            $ins->create();
+          }
+          foreach ($datos->relImpuestos as $im) {
+            $ins = new VentasImpuestos();
+            $ins->VentaId = $ven->Id;
+            $ins->ImpuestoId = $im->ImpuestoId;
+            $ins->Porcentaje = $im->Porcentaje;
+            $ins->base = $im->base;
+            $ins->Valor = $im->Valor;
+            $ins->create();
+          }
+          $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
+        } else {
+          $msj = "No se pudo crear el nuevo registro: " . "\n";
+          foreach ($ven->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->cid = 0;
+          $ret->msj = $msj;
         }
-        $ins->Costo = $mi->Costo;
-        $ins->create();
       }
-      foreach ($datos->relImpuestos as $im) {
-        $ins = new VentasImpuestos();
-        $ins->VentaId = $ven->Id;
-        $ins->ImpuestoId = $im->ImpuestoId;
-        $ins->Porcentaje = $im->Porcentaje;
-        $ins->base = $im->base;
-        $ins->Valor = $im->Valor;
-        $ins->create();
-      }
-      $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
-    } else {
-      $msj = "No se pudo crear el nuevo registro: " . "\n";
-      foreach ($ven->getMessages() as $m) {
-        $msj .= $m . "\n";
-      }
-      $ret->cid = 0;
-      $ret->msj = $msj;
     }
     return $ret;
+  }
+
+  private function crearCliente($datos) {
+    try {
+      $newcli = new Clientes();
+      $newcli->EmpresaId = $datos->EmpresaId;
+      $newcli->Codigo = $datos->Codigo;
+      $newcli->Identificacion = $datos->Identificacion;
+      $newcli->IdentificacionTipo = $datos->IdentificacionTipo;
+      $newcli->Nombres = $datos->Nombres;
+      $newcli->Representante = $datos->Representante;
+      $newcli->Direccion = $datos->Direccion;
+      $newcli->Telefonos = $datos->Telefonos;
+      $newcli->Ciudad = $datos->Ciudad;
+      $newcli->CiudadId = $datos->CiudadId;
+      $newcli->Estado = $datos->Estado;
+      
+      $newcod = $datos->Codigo;
+      if (strlen($datos->Codigo) <= 0) {
+        $di = Di::getDefault();
+        $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Clientes 
+            WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+        $qry = new Query($phql, $di);
+        $rws = $qry->execute();
+        if ($rws->count() === 1) {
+          $rmax = $rws->getFirst();
+          try {
+            $num = intval($rmax['maxcod']);
+          } catch (Exception $e) {
+            //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
+            $num = 0;
+          }
+        }
+        
+        if ($num == 0)
+          $num = 1000;
+        else
+          $num += 1;
+
+        $newcod = strval($num);
+      }
+      $newcli->Codigo = $newcod;
+      if (!$newcli->create()) {
+        $this->response->setStatusCode(500, 'Error');  
+        $msj = "No se pudo crear el nuevo cliente: " . "\n";
+        foreach ($newcli->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+        return $msj;
+      }
+      return "";
+    } catch (Exception $ex) {
+      return $ex->getMessage();
+    }
   }
 
   private function afectarInventario($item, $bod, $origen, $signo) {

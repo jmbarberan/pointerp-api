@@ -31,6 +31,10 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaModificarEstado',
     ]);
+    $this->addPut('/comprobantes/actualizarDataCE', [
+      'controller' => $controlador,
+      'action'     => 'ventaActualizarEstadoCE',
+    ]);
     $this->addPatch('/comprobantes/{id}/autorizar', [
       'controller' => $controlador,
       'action'     => 'ventaAutorizar',
@@ -42,6 +46,10 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
     $this->addPost('/comprobantes/guardar', [
       'controller' => $controlador,
       'action'     => 'ventaGuardar',
+    ]);
+    $this->addPost('/comprobantes/sincronizar', [
+      'controller' => $controlador,
+      'action'     => 'ventasListaGuardar',
     ]);
     $this->addPost('/comprobantes/guardar/usuario/{usuario}/caja/{caja}/cobrar', [
       'controller' => $controlador,

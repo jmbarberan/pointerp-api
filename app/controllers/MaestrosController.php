@@ -3,6 +3,9 @@
 
 namespace Pointerp\Controladores;
 
+use Exception;
+use Phalcon\Di;
+use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\ClientesSri;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
@@ -126,6 +129,88 @@ class MaestrosController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function guardarClienteAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => $datos->Id,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    try {
+      $newcli = new Clientes();
+      if ($datos->Id > 0) {
+        $newcli = Clientes::findFirstById($datos->Id);
+      }
+      $newcli->EmpresaId = $datos->EmpresaId;
+      $newcli->Codigo = $datos->Codigo;
+      $newcli->Identificacion = $datos->Identificacion;
+      $newcli->IdentificacionTipo = $datos->IdentificacionTipo;
+      $newcli->Nombres = $datos->Nombres;
+      $newcli->Representante = $datos->Representante;
+      $newcli->Direccion = $datos->Direccion;
+      $newcli->Telefonos = $datos->Telefonos;
+      $newcli->Ciudad = $datos->Ciudad;
+      $newcli->CiudadId = $datos->CiudadId;
+      $newcli->Estado = $datos->Estado;
+      if ($datos->Id > 0) {
+        if (!$newcli->update()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo actualizar el cliente: " . "\n";
+          foreach ($newcli->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      } else {
+        $newcod = $datos->Codigo;
+        if (strlen($datos->Codigo) <= 0) {
+          $di = Di::getDefault();
+          $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Clientes 
+              WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+          $qry = new Query($phql, $di);
+          $rws = $qry->execute();
+          if ($rws->count() === 1) {
+            $rmax = $rws->getFirst();
+            try {
+              $num = intval($rmax['maxcod']);
+            } catch (Exception $e) {
+              //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
+              $num = 0;
+            }
+          }
+          
+          if ($num == 0)
+            $num = 1000;
+          else
+            $num += 1;
+
+          $newcod = strval($num);
+        }
+        $newcli->Codigo = $newcod;
+        if (!$newcli->create()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo crear el nuevo cliente: " . "\n";
+          foreach ($newcli->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->response->setStatusCode(500, 'Error');  
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $ex->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
     $this->response->send();
   }
   #endregion

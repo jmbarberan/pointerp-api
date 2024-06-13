@@ -30,6 +30,11 @@ class MaestrosRutas extends \Phalcon\Mvc\Router\Group
       'action'     => 'guardarCliente',
     ]);
 
+    $this->addGet('/clientes/buscar/externo/{identificacion}', [
+      'controller' => $controlador,
+      'action'     => 'buscarCedulaSRI',
+    ]);
+
     $this->addGet('/proveedores/cedula/{ced}', [
       'controller' => $controlador,
       'action'     => 'proveedoresPorCedula',

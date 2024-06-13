@@ -19,7 +19,7 @@
         "DBS_HOST":"localhost",
         "DBS_NAME":"viniapro",
         "DBS_USER":"postgres",
-        "DBS_PASS":"jmbg",
+        "DBS_PASS":"jmbg1",
         "DBS_PORT":"5432",
         "DBS_SCHEME":"subscripciones"
       }
@@ -37,7 +37,7 @@
         "public"
       ],
       "program": "",
-      "cwd": "D:\\Desarrollo\\Proyectos\\Pointerp\\pointerp-api",
+      "cwd": "C:\\Desarrollo\\Repositorios\\pointerp-api",
       "port": 9090,
       "serverReadyAction": {
         "pattern": "Development Server \\(http://localhost:([0-9]+)\\) started",
@@ -48,8 +48,10 @@
         "DBS_HOST":"localhost",
         "DBS_NAME":"viniapro",
         "DBS_USER":"postgres",
-        "DBS_PASS":"jmbg",
-        "DBS_PORT":"5432"
+        "DBS_PASS":"jmbg1",
+        "DBS_PORT":"5432",
+        "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
+        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986"
       }
     }
   ]

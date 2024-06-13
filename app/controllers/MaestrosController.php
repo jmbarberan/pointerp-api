@@ -213,6 +213,36 @@ class MaestrosController extends ControllerBase  {
     $this->response->setContent(json_encode($ret));
     $this->response->send();
   }
+
+  public function buscarCedulaSRIAction() {
+    $ident = $this->dispatcher->getParam('identificacion');
+    $nombre = '';
+    $url = getenv('URL_SRIQRY_BASE') . $ident . getenv('URL_SRIQRY_PARAMS');
+    
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json'
+    ]);
+    $response = curl_exec($ch);
+    if ($response === false) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        die('Error en cURL: ' . $error);
+    }
+    curl_close($ch);
+    $data = json_decode($response, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        die('Error al decodificar JSON: ' . json_last_error_msg());
+    }
+    $nombreComercial = isset($data['contribuyente']['nombreComercial']) ? $data['contribuyente']['nombreComercial'] : null;
+    if ($nombreComercial !== null) {
+        $nombre = $nombreComercial;
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($nombre));
+    $this->response->send();
+  }
   #endregion
 
   #region Proveedores

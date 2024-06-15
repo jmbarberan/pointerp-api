@@ -69,19 +69,19 @@ $di->setShared('view', function () {
  * Database connection is created based in the parameters defined in the configuration file
  */
 $di->setShared('db', function () {
+    $params = [
+        "host"     => getenv('DBS_HOST'),
+        "username" => getenv('DBS_USER'),
+        "password" => getenv('DBS_PASS'),
+        "dbname"   => getenv('DBS_NAME'),
+        "port"     => getenv('DBS_PORT'),
+    ];
+    $connection = new PgConnection($params);
     $request = new Request();
-    $connection = new PgConnection(
-        [
-            "host"     => getenv('DBS_HOST'),
-            "username" => getenv('DBS_USER'),
-            "password" => getenv('DBS_PASS'),
-            "dbname"   => getenv('DBS_NAME'),
-            "port"     => getenv('DBS_PORT'),
-        ]
-    );
+    $schema = getenv('DBS_SCHEME');
     $con = $connection->fetchAll(
         "SELECT id, dbhost, dbname, dbuser, dbpass, dbport, dbdriver, sharedemps, dbexclusive " .
-        "FROM subscripciones.subscripciones " . 
+        "FROM {$schema}.subscripciones " . 
         "Where clave = '" . trim(base64_decode($request->getHeaders()['Authorization'])) . "'"
     );
     $config = $this->getConfig();

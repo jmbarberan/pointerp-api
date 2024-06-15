@@ -9,8 +9,17 @@ error_reporting(E_ALL);
 define('BASE_PATH', dirname(__DIR__));
 define('APP_PATH', BASE_PATH . '/app');
 
-$debug = new \Phalcon\Debug();
-$debug->listen();
+
+
+/*$version = explode('.', PHP_VERSION);
+if ($version[0] >= 8) {
+    $debug = new \Phalcon\Support\Debug();
+    $debug->listen();
+} else {
+    $debug = new \Phalcon\Debug();
+    $debug->listen();
+}*/
+
 
 try {
     /**

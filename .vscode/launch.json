@@ -21,7 +21,9 @@
         "DBS_USER":"postgres",
         "DBS_PASS":"jmbg1",
         "DBS_PORT":"5432",
-        "DBS_SCHEME":"subscripciones"
+        "DBS_SCHEME":"subscripciones",
+        "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
+        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986"
       }
     },
     {
@@ -50,6 +52,7 @@
         "DBS_USER":"postgres",
         "DBS_PASS":"jmbg1",
         "DBS_PORT":"5432",
+        "DBS_SCHEME":"subscripciones",
         "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
         "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986"
       }

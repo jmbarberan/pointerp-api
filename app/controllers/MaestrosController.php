@@ -226,14 +226,12 @@ class MaestrosController extends ControllerBase  {
     ]);
     $response = curl_exec($ch);
     if ($response === false) {
-        $error = curl_error($ch);
-        curl_close($ch);
-        die('Error en cURL: ' . $error);
+        $nombre = 'Error de red';
     }
     curl_close($ch);
     $data = json_decode($response, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
-        die('Error al decodificar JSON: ' . json_last_error_msg());
+        $nombre = 'Error de conversion';
     }
     $nombreComercial = isset($data['contribuyente']['nombreComercial']) ? $data['contribuyente']['nombreComercial'] : null;
     if ($nombreComercial !== null) {

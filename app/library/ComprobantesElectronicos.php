@@ -17,6 +17,12 @@ use Selective\XmlDSig\XmlSigner;*/
 
 //require $_SERVER['DOCUMENT_ROOT'] . '/vendor/robrichards/xmlseclibs/src/XMLSecurityDSig.php';
 
+use Pointerp\Modelos\EmpresaParametros;
+use Pointerp\Modelos\Empresas;
+use Pointerp\Modelos\Maestros\Impuestos;
+use RobRichards\XMLSecLibs\XMLSecurityDSig;
+use RobRichards\XMLSecLibs\XMLSecurityKey;
+
 class ComprobantesElectronicos {
 
   static $db = null;
@@ -57,9 +63,20 @@ class ComprobantesElectronicos {
   }
 
   static function crearXmlFactura($comprobante, $tipoDatos, $contribuyente) {
-    $codigoDocumento = ""; // Aleatorio
+    // traer datos del impuesto vigente
+    $paramFaEmpresa = EmpresaParametros::findFirst([
+      'conditions' => "EmpresaId = {$comprobante->relCliente->EmpresaId} and Tipo = 1"      
+    ]);    
+    // traer todos los impuestos a un arreglo indexado
+    $impuestosAr = array();
+    $impsQry = Impuestos::find([
+      'conditions' => 'Estado = 0'
+    ]);
+    foreach ($impsQry as $imp) {
+      $impuestosAr[$imp->id] = $imp;
+    }
+    $impuestoVigente = $impuestosAr[$paramFaEmpresa->RegistroId];
     $formaPago = "01";
-    $empresaId = $comprobante->relCliente->EmpresaId;
 
     #region Tipo identificacion
     $tipoIdent = "07";    
@@ -167,8 +184,10 @@ class ComprobantesElectronicos {
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('dirMatriz', $comprobante->relSucursal->Direccion);
       $cbc = $infoTributaria->appendChild($cbc);
-      /*$cbc = $xml->createElement('regimenMicroempresas', $contribuyente->regimen);
-      $cbc = $infoTributaria->appendChild($cbc);*/
+      if (isset($paramFaEmpresa->Denominacion)) {
+        $cbc = $xml->createElement('regimenMicroempresas', $paramFaEmpresa->Denominacion);
+        $cbc = $infoTributaria->appendChild($cbc);
+      }
 
     // INFORMACION DE FACTURA.
       $infoFactura = $xml->createElement('infoFactura');
@@ -200,13 +219,13 @@ class ComprobantesElectronicos {
       if ($comprobante->Subtotal > 0) {
         $totalImpuesto12 = $xml->createElement('totalImpuesto');
         $totalImpuesto12 = $totalConImpuestos->appendChild($totalImpuesto12);
-        $cbc = $xml->createElement('codigo', '2');
+        $cbc = $xml->createElement('codigo', $impuestoVigente->CodigoEmision);
         $cbc = $totalImpuesto12->appendChild($cbc);
-        $cbc = $xml->createElement('codigoPorcentaje', '2');
+        $cbc = $xml->createElement('codigoPorcentaje', $impuestoVigente->CodigoPorcentaje);
         $cbc = $totalImpuesto12->appendChild($cbc);
         $cbc = $xml->createElement('baseImponible', number_format($comprobante->Subtotal, 2, ".", ""));
         $cbc = $totalImpuesto12->appendChild($cbc);
-        $cbc = $xml->createElement('tarifa', '12');
+        $cbc = $xml->createElement('tarifa', $impuestoVigente->Porcentaje);
         $cbc = $totalImpuesto12->appendChild($cbc);
         $cbc = $xml->createElement('valor', number_format($comprobante->Impuestos, 2, ".", ""));
         $cbc = $totalImpuesto12->appendChild($cbc);
@@ -215,7 +234,7 @@ class ComprobantesElectronicos {
       if ($comprobante->SubtotalEx > 0) {
         $totalImpuesto0 = $xml->createElement('totalImpuesto');
         $totalImpuesto0 = $totalConImpuestos->appendChild($totalImpuesto0);
-        $cbc = $xml->createElement('codigo', '2');
+        $cbc = $xml->createElement('codigo', $impuestoVigente->CodigoEmision);
         $cbc = $totalImpuesto0->appendChild($cbc);
         $cbc = $xml->createElement('codigoPorcentaje', '0');
         $cbc = $totalImpuesto0->appendChild($cbc);
@@ -253,7 +272,7 @@ class ComprobantesElectronicos {
       $detalles = $factura->appendChild($detalles);
 
     foreach ($comprobante->relItems as $vi) {
-      $numerolinea = 0;
+      //$numerolinea = 0;
 
       $subtotal = doubleval($vi->Cantidad) * doubleval($vi->Precio);
       $detalle = $xml->createElement('detalle');
@@ -276,7 +295,7 @@ class ComprobantesElectronicos {
         // sin impuestos
         $impuesto = $xml->createElement('impuesto');
         $impuesto = $impuestos->appendChild($impuesto);
-        $cbc = $xml->createElement('codigo', '2');
+        $cbc = $xml->createElement('codigo', $impuestoVigente->CodigoEmision);
         $cbc = $impuesto->appendChild($cbc);
         $cbc = $xml->createElement('codigoPorcentaje', '0');
         $cbc = $impuesto->appendChild($cbc);
@@ -286,17 +305,18 @@ class ComprobantesElectronicos {
         $cbc = $impuesto->appendChild($cbc);
       } else {
         foreach($vi->relProducto->relImposiciones as $im) {
+          $impuestoItem = $impuestosAr[$im->ImpuestoId];
           $impuesto = $xml->createElement('impuesto');
           $impuesto = $impuestos->appendChild($impuesto);
-          $cbc = $xml->createElement('codigo', '2');
+          $cbc = $xml->createElement('codigo', $impuestoItem->CodigoEmision);
           $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('codigoPorcentaje', '2');
+          $cbc = $xml->createElement('codigoPorcentaje', $impuestoItem->CodigoPorcentaje);
           $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('tarifa', '12'); // TODO parametrizar del impuesto seleccionado
+          $cbc = $xml->createElement('tarifa', $impuestoItem->Porcentaje);
           $cbc = $impuesto->appendChild($cbc);
           $cbc = $xml->createElement('baseImponible', number_format($subtotal, 2, ".", ""));
           $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('valor', number_format((($subtotal * 12) / 100), 2, ".", ""));
+          $cbc = $xml->createElement('valor', number_format((($subtotal * $impuestoItem->Porcentaje) / 100), 2, ".", ""));
           $cbc = $impuesto->appendChild($cbc);
         }
       }
@@ -307,7 +327,7 @@ class ComprobantesElectronicos {
     return $strings_xml;
   }
 
-  static function firmarXml($xml, $pfx, $pass) {
+  static function firmarXml($xml, $file, $pass) {
     //return $fe->getData()['serialNumber'];
     //$rutapfx = __DIR__ . '/public/index.php'
     /*$rutapfx = $_SERVER["DOCUMENT_ROOT"] .DIRECTORY_SEPARATOR.
@@ -335,8 +355,35 @@ class ComprobantesElectronicos {
     $objDSig->add509Cert(file_get_contents($cert));
     $objDSig->appendSignature($doc->documentElement);
     return $doc->saveXML();*/
-  }
 
+    // Cargar el archivo .p12
+    $pkcs12 = file_get_contents($file);
+    if (!openssl_pkcs12_read($pkcs12, $certs, $pass)) {
+        throw new Exception("Error al leer el archivo .p12");
+    }
+    $privateKey = $certs['pkey'];
+    $publicCert = $certs['cert'];
+    $doc = new DOMDocument();
+    $doc->loadXML($xml);
+    $objDSig = new XMLSecurityDSig();
+    $objDSig->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
+    // Firmar todos los elementos del XML
+    $objDSig->addReference(
+        $doc, 
+        XMLSecurityDSig::SHA1, 
+        array('http://www.w3.org/2000/09/xmldsig#enveloped-signature')
+    );
+    // Crear una nueva clave de seguridad (llave privada)
+    $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, array('type' => 'private'));
+    $objKey->loadKey($privateKey);
+    // Agregar la firma al documento
+    $objDSig->sign($objKey);
+    // Agregar la clave pública al documento firmado
+    $objDSig->add509Cert($publicCert);
+    $objDSig->appendSignature($doc->documentElement);
+    return $doc->saveXML();
+
+  }
   static function generarXades($xml, $params) {
     $sha1_factura = base64_encode(str_replace('<?xml version="1.0" encoding="UTF-8"?>\n', '', $xml));
     $xmlns = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
@@ -467,7 +514,6 @@ class ComprobantesElectronicos {
         $xades_bes .= '</ds:Object>';
     $xades_bes .= '</ds:Signature>';
   }
-
   public static function enviar($p) {
     $p->firmardo;
     $url = $p->url;
@@ -485,36 +531,43 @@ class ComprobantesElectronicos {
   }
 
   public static function procesarFactura($comprobante, $pdb) {
-    self::$db = $pdb;
-    $emp = self::$db->fetchAll(
+    $emp = Empresas::findById($comprobante->relCliente->EmpresaId);
+    $paramFaEmpresa = EmpresaParametros::findFirst([
+      'conditions' => "EmpresaId = {$comprobante->relCliente->EmpresaId} and Tipo = 1"      
+    ]);
+    //self::$db = $pdb;
+    /*$emp = self::$db->fetchAll(
       "SELECT Id, Ruc, RazonSocial, NombreComercial, CEResolucion, ObligadoContabilidad, CertificadoRuta, CertificadoClave, Soporte " .
       "FROM empresas " . 
       "Where Id = " . $comprobante->relCliente->EmpresaId
     );
     if (count($emp) > 0) {
       $emp = reset($emp);
-    }
+    }*/
     $tipoDatos = (object) [
       'tipoDocumento' => '01', // 01: FACTURA
       'tipoEmision' => '1',  // OFFLINE UNICO VALOR VALIDO
       'ambiente' => '2' // 1: PRUEBAS; 2: PRODUCCION
-    ];    
-    $contribuyente = (object) [
+    ];
+    $empresaContribuyente = (object) [
       'empresaId' => $comprobante->relCliente->EmpresaId,
-      'ruc' => $emp["Ruc"],
-      'razonSocial' => $emp["RazonSocial"],
-      'nombreComercial' => $emp["NombreComercial"],
-      'contribuyenteEspecial' => $emp["CEResolucion"] != null ? $emp["CEResolucion"] : "NO",
+      'ruc' => $emp->Ruc,
+      'razonSocial' => $emp->RazonSocial,
+      'nombreComercial' => $emp->NombreComercial,
+      'contribuyenteEspecial' => $emp->CEResolucion != null ? $emp->CEResolucion : "NO",
       'obligadoContabilidad' => intval($emp["ObligadoContabilidad"]) == 1 ? 0 : 1
     ];
+
     $rutapfx = $emp["CertificadoRuta"];
+    $archivo = basename($rutapfx);
+    $archivoCert = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . 'certs' . DIRECTORY_SEPARATOR. $archivo;
     $pass = $emp["CertificadoClave"];
-    if ($emp["Soporte"] == -1) {
-      $pass = base64_decode($pass);
+    if (isset($paramFaEmpresa) && isset($paramFaEmpresa->Extendido) && $paramFaEmpresa->Extendido != '0') {
+      $pass = base64_decode($paramFaEmpresa->Extendido);
     }
     
-    $xml = self::crearXmlFactura($comprobante, $tipoDatos, $contribuyente);
-    $frm = self::firmarXml($xml, $rutapfx, $pass);
+    $xml = self::crearXmlFactura($comprobante, $tipoDatos, $empresaContribuyente);
+    $frm = self::firmarXml($xml, $archivoCert, $pass);
     file_put_contents('fa_' . strval($comprobante->Numero) . '.xml', "\xEF\xBB\xBF".  $frm);
     
     return $frm;
@@ -534,8 +587,5 @@ class ComprobantesElectronicos {
     $cert = $res['cert'].implode('', $res['extracerts']);
     file_put_contents(APP_PATH . '\files\sign\KEY' . $code . '.pem', $cert);
   }
-
 }
 
-
-?>

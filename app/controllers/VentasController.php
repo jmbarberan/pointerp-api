@@ -276,7 +276,7 @@ class VentasController extends ControllerBase  {
           $ret->msj = "El documento ya se encuentra registrado";
         } 
       }
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
       $this->response->setStatusCode(500, 'Error');
       $ret->cid = 0;
       $ret->msj = $e->getMessage();
@@ -472,7 +472,7 @@ class VentasController extends ControllerBase  {
       try {
         //$msj = \ComprobantesElectronicos::procesarFactura($ven, $db);
         //$msj = "Procesado correctamente";
-      } catch (\Exception $e) {
+      } catch (Exception $e) {
         $this->response->setStatusCode(500, 'Error');  
         $msj = $e->getMessage();
       }
@@ -566,88 +566,97 @@ class VentasController extends ControllerBase  {
     ];
 
     $guardar = true;
-    if ($datos->ClienteId <= 0) {
-      $resp = $this->crearCliente($datos->ClienteNav);
-      if (strlen($resp) > 0) {
-        $ret->msj = "Error al crear el cliente: {$resp}";
-        $guardar = false;
+    $this->db->begin();
+    try {
+      if ($datos->ClienteId <= 0) {
+        $resp = $this->crearCliente($datos->ClienteNav);
+        if (strlen($resp) > 0) {
+          $ret->msj = "Error al crear el cliente: {$resp}";
+          $guardar = false;
+        }
       }
-    }
-    if ($guardar) {
-      $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
-      $ven = new Ventas();
-      $ven->Numero = $num;
-      $ven->Tipo = $datos->Tipo;
-      $ven->Fecha = $datos->Fecha;
-      $ven->SucursalId = $datos->SucursalId;
-      $ven->BodegaId = $datos->BodegaId;
-      $ven->Plazo = $datos->Plazo;
-      $ven->ClienteId = $datos->ClienteId;
-      $ven->VendedorId = $datos->VendedorId;
-      $ven->Notas = $datos->Notas;
-      $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
-      $ven->PorcentajeVenta = $datos->PorcentajeVenta;
-      $ven->Subtotal = $datos->Subtotal;
-      $ven->SubtotalEx = $datos->SubtotalEx;
-      $ven->Descuento = $datos->Descuento;
-      $ven->Recargo = $datos->Recargo;
-      $ven->Flete = $datos->Flete;
-      $ven->Impuestos = $datos->Impuestos;
-      $ven->Abonos = $cobrado;
-      $ven->AbonosPf = $datos->AbonosPf;
-      $ven->Estado = $cobrado > 0 ? 1 : $datos->Estado;
-      $ven->Especie = $datos->Especie; // receta, servicio medico
-      $ven->CEClaveAcceso = $datos->CEClaveAcceso;
-      $ven->CEAutorizacion = $datos->CEAutorizacion;
-      $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
-      $ven->CEContenido = $datos->CEContenido;
-      $ven->CEEtapa = $datos->CEEtapa;
-      $ven->CERespuestaId = $datos->CERespuestaId;
-      $ven->CERespuestaTipo = $datos->CERespuestaTipo;
-      $ven->CERespuestaMsj = $datos->CERespuestaMsj;
-      $ven->Comprobante = $datos->Comprobante;
-      $ven->Contado = $cobrado > 0 ? 1 : 0;
-      $ven->Operador = $datos->Operador;
-      if ($ven->create()) {
-        $ret->res = true;
-        $ret->cid = $ven->Id;
-        $ret->num = $ven->Numero;
-        $ret->msj = "Se registro correctamente la nueva transaccion";  
-        // Crear items
-        foreach ($datos->relItems as $mi) {
-          $ins = new VentasItems();
-          $ins->VentaId = $ven->Id;
-          $ins->ProductoId = $mi->ProductoId;
-          $ins->Bodega = $mi->Bodega;
-          $ins->Cantidad = $mi->Cantidad;
-          $ins->Precio = $mi->Precio;
-          $ins->Descuento = $mi->Descuento;
-          $ins->Adicional = $mi->Adicional;
-          $ins->Despachado = $mi->Despachado;
-          if (isset($mi->Codigo)) {
-            $ins->Codigo = $mi->Codigo;
+      if ($guardar) {
+        $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
+        $ven = new Ventas();
+        $ven->Numero = $num;
+        $ven->Tipo = $datos->Tipo;
+        $ven->Fecha = $datos->Fecha;
+        $ven->SucursalId = $datos->SucursalId;
+        $ven->BodegaId = $datos->BodegaId;
+        $ven->Plazo = $datos->Plazo;
+        $ven->ClienteId = $datos->ClienteId;
+        $ven->VendedorId = $datos->VendedorId;
+        $ven->Notas = $datos->Notas;
+        $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
+        $ven->PorcentajeVenta = $datos->PorcentajeVenta;
+        $ven->Subtotal = $datos->Subtotal;
+        $ven->SubtotalEx = $datos->SubtotalEx;
+        $ven->Descuento = $datos->Descuento;
+        $ven->Recargo = $datos->Recargo;
+        $ven->Flete = $datos->Flete;
+        $ven->Impuestos = $datos->Impuestos;
+        $ven->Abonos = $cobrado;
+        $ven->AbonosPf = $datos->AbonosPf;
+        $ven->Estado = $cobrado > 0 ? 1 : $datos->Estado;
+        $ven->Especie = $datos->Especie; // receta, servicio medico
+        $ven->CEClaveAcceso = $datos->CEClaveAcceso;
+        $ven->CEAutorizacion = $datos->CEAutorizacion;
+        $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
+        $ven->CEContenido = $datos->CEContenido;
+        $ven->CEEtapa = $datos->CEEtapa;
+        $ven->CERespuestaId = $datos->CERespuestaId;
+        $ven->CERespuestaTipo = $datos->CERespuestaTipo;
+        $ven->CERespuestaMsj = $datos->CERespuestaMsj;
+        $ven->Comprobante = $datos->Comprobante;
+        $ven->Contado = $cobrado > 0 ? 1 : 0;
+        $ven->Operador = $datos->Operador;
+        if ($ven->create()) {
+          $ret->res = true;
+          $ret->cid = $ven->Id;
+          $ret->num = $ven->Numero;
+          $ret->msj = "Se registro correctamente la nueva transaccion";  
+          // Crear items
+          foreach ($datos->relItems as $mi) {
+            $ins = new VentasItems();
+            $ins->VentaId = $ven->Id;
+            $ins->ProductoId = $mi->ProductoId;
+            $ins->Bodega = $mi->Bodega;
+            $ins->Cantidad = $mi->Cantidad;
+            $ins->Precio = $mi->Precio;
+            $ins->Descuento = $mi->Descuento;
+            $ins->Adicional = $mi->Adicional;
+            $ins->Despachado = $mi->Despachado;
+            if (isset($mi->Codigo)) {
+              $ins->Codigo = $mi->Codigo;
+            }
+            $ins->Costo = $mi->Costo;
+            $ins->create();
           }
-          $ins->Costo = $mi->Costo;
-          $ins->create();
+          foreach ($datos->relImpuestos as $im) {
+            $ins = new VentasImpuestos();
+            $ins->VentaId = $ven->Id;
+            $ins->ImpuestoId = $im->ImpuestoId;
+            $ins->Porcentaje = $im->Porcentaje;
+            $ins->base = $im->base;
+            $ins->Valor = $im->Valor;
+            $ins->create();
+          }
+          $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
+
+        } else {
+          $msj = "No se pudo crear el nuevo registro: " . "\n";
+          foreach ($ven->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->cid = 0;
+          $ret->msj = $msj;
         }
-        foreach ($datos->relImpuestos as $im) {
-          $ins = new VentasImpuestos();
-          $ins->VentaId = $ven->Id;
-          $ins->ImpuestoId = $im->ImpuestoId;
-          $ins->Porcentaje = $im->Porcentaje;
-          $ins->base = $im->base;
-          $ins->Valor = $im->Valor;
-          $ins->create();
-        }
-        $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
-      } else {
-        $msj = "No se pudo crear el nuevo registro: " . "\n";
-        foreach ($ven->getMessages() as $m) {
-          $msj .= $m . "\n";
-        }
-        $ret->cid = 0;
-        $ret->msj = $msj;
       }
+      $this->db->commit();
+    } catch (Exception $ex) {
+      $this->db->rollback();
+      $ret->cid = 0;
+      $ret->msj = "Error: " . $ex->getMessage();
     }
     return $ret;
   }

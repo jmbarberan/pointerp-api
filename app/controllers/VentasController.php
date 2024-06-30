@@ -680,7 +680,7 @@ class VentasController extends ControllerBase  {
     }
     return $ret;
   }
- c xxxxxxxxv
+
   private function crearCliente($datos) {
     try {
       $newcli = new Clientes();

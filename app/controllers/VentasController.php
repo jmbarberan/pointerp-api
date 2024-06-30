@@ -98,6 +98,35 @@ class VentasController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function ventasDiarioCEAction() {
+    $this->view->disable();
+    $suc = $this->dispatcher->getParam('sucursal');
+    $estado = $this->dispatcher->getParam('estado');    
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta');
+    $condicionEstado = '';
+    if ($estado == 0) {
+      $condicionEstado = " AND ven.Estado = {$estado}";
+    }
+    $sql = "Select cast(ven.CERespuestaTipo as UNSIGNED) as Secuencial, ven.Id, ven.Tipo, ven.Numero, ven.Fecha, ven.CEAutorizaFecha, ven.CEClaveAcceso,
+      ven.Subtotal, ven.SubtotalEx, ven.Impuestos, ven.Descuento, ven.Recargo, ven.Flete, ven.Estado, cli.Nombres, cli.Identificacion, ven.Tipo
+      from Pointerp\Modelos\Ventas\Ventas ven
+      left join Pointerp\Modelos\Maestros\Clientes cli on ven.ClienteId = cli.Id
+      where ven.Tipo in (11, 12) AND ven.SucursalId = {$suc}{$condicionEstado} AND ven.Fecha between '{$desde}' and '$hasta' and ven.CEAutorizaFecha is not null
+      order by Secuencial";
+    $qry = new Query($sql, Di::getDefault());
+    $res = $qry->execute();
+    
+    if ($res->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
   public function ventaGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
@@ -651,7 +680,7 @@ class VentasController extends ControllerBase  {
     }
     return $ret;
   }
-
+ c xxxxxxxxv
   private function crearCliente($datos) {
     try {
       $newcli = new Clientes();

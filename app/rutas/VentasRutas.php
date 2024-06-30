@@ -59,5 +59,9 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaCrearCobrar',
     ]);
+    $this->addGet('/comprobantes/sucursal/{sucursal}/estado/{estado}/desde/{desde}/hasta/{hasta}/electronicos', [
+      'controller' => $controlador,
+      'action'     => 'ventasDiarioCE',
+    ]);
   }
 }

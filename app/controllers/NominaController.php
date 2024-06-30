@@ -2,6 +2,7 @@
 
 namespace Pointerp\Controladores;
 
+use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Nomina\Registros;
@@ -24,12 +25,11 @@ class NominaController extends ControllerBase {
     $tab = $this->dispatcher->getParam('tabla');
     $sub = $this->dispatcher->getParam('sub');
     $emp = $this->dispatcher->getParam('emp');
-    $res = [];
     $res = Registros::find([
       'conditions' => "subscripcion_id = " . $sub . " AND empresa_id = " . $emp . " AND tabla_id = " . $tab,
       'order' => 'indice'
     ]);
-    if (count($res) > 0) {
+    if ($res->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $this->response->setStatusCode(404, 'Not found');
@@ -45,12 +45,11 @@ class NominaController extends ControllerBase {
     $idx = $this->dispatcher->getParam('indice');
     $sub = $this->dispatcher->getParam('sub');
     $emp = $this->dispatcher->getParam('emp');
-    $res = [];
     $res = Registros::find([
       'conditions' => "subscripcion_id = " . $sub . " AND empresa_id = " . $emp . " AND tabla_id = " . $tab . " AND indice = " . $idx,
       'order' => 'indice'
     ]);
-    if (count($res) > 0) {
+    if ($res->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $this->response->setStatusCode(404, 'Not found');
@@ -92,7 +91,7 @@ class NominaController extends ControllerBase {
       'conditions' => $condiciones,
       'order' => 'denominacion'
     ]);
-    if (count($res) > 0) {
+    if ($res->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $this->response->setStatusCode(404, 'Not found');
@@ -226,7 +225,7 @@ class NominaController extends ControllerBase {
       'conditions' => $condiciones,
       'order' => 'denominacion'
     ]);
-    if (count($res) > 0) {
+    if ($res->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $this->response->setStatusCode(404, 'Not found');
@@ -1055,7 +1054,7 @@ class NominaController extends ControllerBase {
           $ings = doubleval($sumas['ings']);
           $egrs = doubleval($sumas['egrs']);
           $rol->pagado = $ings - $egrs;
-        } catch(Exception $ex) {}
+        } catch(\Exception $ex) {}
       }
 
       $rol->estado = 1;

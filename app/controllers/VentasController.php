@@ -578,6 +578,29 @@ class VentasController extends ControllerBase  {
     }
   }
 
+  public function ultimoNumeroVentaCEAction($tipo, $suc) {
+    try {
+      $sql = "Select cast(ven.CERespuestaTipo as UNSIGNED) as Secuencial, ven.Id, ven.Tipo, ven.Numero, ven.Fecha, ven.CEAutorizaFecha, ven.CEClaveAcceso,
+        ven.Subtotal, ven.SubtotalEx, ven.Impuestos, ven.Descuento, ven.Recargo, ven.Flete, ven.Estado, cli.Nombres, cli.Identificacion, ven.CERespuestaMsj
+        from Pointerp\Modelos\Ventas\Ventas ven
+        left join Pointerp\Modelos\Maestros\Clientes cli on ven.ClienteId = cli.Id
+        where ven.Tipo IN (11, 12) AND ven.SucursalId = {$suc} AND 
+        (ven.CEClaveAcceso is not null AND TRIM(ven.CEClaveAcceso) != '') AND 
+		    (ven.CERespuestaTipo is not null AND TRIM(ven.CERespuestaTipo) != '' AND cast(ven.CERespuestaTipo as UNSIGNED) > 0)
+        order by Secuencial";
+      $qry = new Query($sql, Di::getDefault());
+      $res = $qry->execute();
+      
+      if ($res->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+      } else {
+        $this->response->setStatusCode(404, 'Not found');
+      }
+    } catch (Exception $ex) {
+      return -1;
+    }
+  }
+
   private function ultimoNumeroCobro($tipo, $suc) {
     return Comprobantes::maximum([
       'column' => 'Numero',

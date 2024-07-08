@@ -232,7 +232,7 @@ class InventariosController extends ControllerBase  {
 
   public function productoGuardarAction() {
     try {
-      
+      $soloIva = $this->request->getQuery('soloiva', null, false);
       $datos = $this->request->getJsonRawBody();
       $ret = (object) [
         'res' => false,
@@ -290,28 +290,49 @@ class InventariosController extends ControllerBase  {
               $insp->create();
             }
           }
-          // Traer imposisiones existentes
-          $pivas = ProductosImposiciones::find([
-            'conditions' => 'ProductoId = :pid:',
-            'bind' => [ 'pid' => $datos->Id ]
-          ]);
-          if ($pivas->count() > 0) {
-            // Si hay registro de iva en db
-            if ($datos->relImposiciones && count($datos->relImposiciones) <= 0) { // Eliminar
-              $prdimp = reset($pivas);
-              $piv = ProductosImposiciones::findFirstById($prdimp->Id);
-              if (isset($piv) && $piv != null) {
-                $piv->delete();
+
+          if ($soloiva) {
+            $param = EmpresaParametros::findFirst([
+              "conditions" => "Tipo = 1 and EmpresaId = {$prd->EmpresaId}"
+            ]);
+            $filaImpos = reset($datos->relImposiciones);
+            $impuestoId = $filaImpos->ImpuestoId;
+            if (isset($param)) {
+              $impuestoId = $param->RegistroId;
+            }
+            $pivas = ProductosImposiciones::find([
+              'conditions' => 'ProductoId = :pid: AND ImpuestoId != :imp:',
+              'bind' => [ 'pid' => $datos->Id, 'imp' => $impuestoId ]
+            ]);
+            if ($pivas->count() > 0) {
+              foreach ($pivas as $pivaItem) {
+                $pivaItem->delete();
               }
             }
+            $piv = new ProductosImposiciones();
+            $piv->ProductoId = $filaImpos->ProductoId;
+            $piv->ImpuestoId = $impuestoId;
+            $piv->create();
           } else {
-            // no hay resgistro de iva db
-            if ($datos->relImposiciones && count($datos->relImposiciones) > 0) {
-              $prdimp = reset($datos->relImposiciones);
-              $piv = new ProductosImposiciones();
-              $piv->ProductoId = $datos->Id;
-              $piv->ImpuestoId = $prdimp->ImpuestoId;
-              $piv->create();
+            // eliminar los ids q no estan en la lista y son mayor q cero
+            $pivas = ProductosImposiciones::find([
+              'conditions' => 'ProductoId = :pid:',
+              'bind' => [ 'pid' => $datos->Id ]
+            ]);
+
+            foreach($datos->relImposiciones as $impos) {
+              if ($impos->Id > 0) {
+                $piv = ProductosImposiciones::findFirstById($prdimp->Id);
+                if (isset($piv) && $piv != null) {
+                  $piv->ImpuestoId = $impos->ImpuestoId;
+                  $piv->update();
+                }
+              } else {
+                $piv = new ProductosImposiciones();
+                $piv->ProductoId = $datos->Id;
+                $piv->ImpuestoId = $prdimp->ImpuestoId;
+                $piv->create();
+              }
             }
           }
           $ret->res = true;
@@ -383,10 +404,19 @@ class InventariosController extends ControllerBase  {
           $ret->cid = $prd->Id;          
           $ret->msj = "Se registrara las imposiciones";
           // Crear imposiciones
+          $impuestoId = $mi->ImpuestoId;
+          if ($soloIva) {
+            $param = EmpresaParametros::find([
+              "conditions" => "Tipo = 1 and EmpresaId = {$prd->EmpresaId}"
+            ]);
+            if (isset($param)) {
+              $impuestoId = $param->RegistroId;
+            }
+          }
           foreach ($datos->relImposiciones as $mi) {
             $ins = new ProductosImposiciones();
             $ins->ProductoId = $prd->Id;
-            $ins->ImpuestoId = $mi->ImpuestoId;
+            $ins->ImpuestoId = $impuestoId;
             $ins->create();
           }
           $ret->msj = "Se registrara los precios";

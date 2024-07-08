@@ -14,7 +14,10 @@ use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Cxc\Comprobantes;
 use Pointerp\Modelos\Cxc\ComprobanteItems;
 use Pointerp\Modelos\Cxc\ComprobanteDocumentos;
+use Pointerp\Modelos\EmpresaParametros;
+use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Clientes;
+use Pointerp\Modelos\Sucursales;
 
 class VentasController extends ControllerBase  {
 
@@ -101,6 +104,7 @@ class VentasController extends ControllerBase  {
   public function ventaGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
+      $generarCA = $this->request->getQuery('generarCA', null, false);
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
@@ -268,6 +272,10 @@ class VentasController extends ControllerBase  {
         }
 
         if (!$vendoble) {
+          if ($generarCA) {
+            $cveAcceso = $this->generarClaveAcceso($datos->SucursalId);
+            $datos->CEClaveAcceso = $cveAcceso;
+          }
           $ret = $this->guardarVentaNueva($datos, 0, false);
           if ($ret->res) {
             $this->response->setStatusCode(201, 'Ok');
@@ -308,6 +316,7 @@ class VentasController extends ControllerBase  {
   public function ventaCrearCobrarAction() {
     $caja = $this->dispatcher->getParam('caja');
     $usuario = $this->dispatcher->getParam('usuario');
+    $generarCA = $this->request->getQuery('generarCA', null, false);
     $datos = $this->request->getJsonRawBody();
     $ret = (object) [
       'res' => false,
@@ -332,6 +341,10 @@ class VentasController extends ControllerBase  {
 
     if (!$vendoble) {
       $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
+      if ($generarCA) {
+        $cveAcceso = $this->generarClaveAcceso($datos->SucursalId);
+        $datos->CEClaveAcceso = $cveAcceso;
+      }
       $ret = $this->guardarVentaNueva($datos, $cobrado, false);
       if ($ret->res) {
         $vta = $ret->ven;
@@ -788,5 +801,87 @@ class VentasController extends ControllerBase  {
     } else {
       return 0;
     }
+  }
+
+  private function calcularDigitoVerificadorCadena($cadena) {
+    $cadenaInversa = strrev($cadena);    
+    $factor = 2;
+    $res = 0;
+    if (strlen($cadenaInversa) > 0) {
+      for ($i = 0; $i < strlen($cadenaInversa); $i++)
+      {
+        $factor = $factor == 8 ? 2 : $factor;
+        $producto = intval(substr($cadenaInversa, $i, 1));
+        $producto *= $factor;
+        $factor++;
+        $res .=$producto;
+      }
+
+      $res = 11 - $res % 11;
+      $res = $res == 11 ? 0 : $res;
+      $res = $res == 10 ? 1 : $res;
+    }
+    return $res;
+  }
+
+  private function codigoAleatorio() {
+    $f = new \DateTime();
+    $h = $f->format("H");
+    $t = $f->format("i");
+    $s = $f->format("s");
+    $y = $f->format("Y");
+    $m = $f->format("m");
+    $d = $f->format("d");
+    $calf = intval($y) * intval($m) * intval($d);
+    $calh = intval($h) * intval($t) * intval($s);
+    $generado = rand(1, 101);
+    return strval($calf) . strval($calh) . strval($generado);
+  }
+
+  private function generarClaveAcceso($sucursalId) {
+    #region Secuencial
+    $sucursal = Sucursales::findFirst($sucursalId);
+    $empresa = Empresas::findFirst($sucursal->EmpresaId);
+    $serie = $sucursal->Codigo . trim($sucursal->Descripcion);
+    $paramFaEmpresa = EmpresaParametros::findFirst([
+      'conditions' => "Tipo = 1 AND Referencia = 11 AND EmpresaId = {$empresa->Id}" 
+    ]);
+
+    $tipoDatos = (object) [
+      'tipoDocumento' => '01', // 01: FACTURA
+      'tipoEmision' => '1',  // OFFLINE UNICO VALOR VALIDO
+      'ambiente' => '1' // 1: PRUEBAS; 2: PRODUCCION
+    ];
+
+    #region Ambiente
+    $ruc = "9999999999999";
+    if (isset($empresa)) {
+      $ruc = $empresa->Ruc;
+      $reg = Registros::findFirst($empresa->TipoAmbiente);
+      if (isset($reg))
+        $tipoDatos->ambiente = $reg->Codigo;
+    }
+    #endregion
+
+    #region Clave de acceso
+    
+    $fecha = new \DateTime();
+    $clave = $fecha->format("dmY") .
+      $tipoDatos->tipoDocumento .
+      $ruc .
+      $tipoDatos->ambiente .
+      $serie .
+      str_pad(strval($paramFaEmpresa->Indice), 9, "0", STR_PAD_LEFT) .
+      str_pad(self::codigoAleatorio(), 8, "1", STR_PAD_LEFT) .
+      $tipoDatos->tipoEmision;
+    $clave .= strval(self::calcularDigitoVerificadorCadena($clave));
+    #endregion
+
+    $numSig = intval($paramFaEmpresa->Indice);
+    $numSig++;
+    $paramFaEmpresa->Indice = $numSig;
+    $paramFaEmpresa->update();
+
+    return $clave;
   }
 }

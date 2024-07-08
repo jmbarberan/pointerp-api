@@ -34,7 +34,7 @@
         "-dxdebug.mode=debug",
         "-dxdebug.start_with_request=yes",
         "-S",
-        "192.168.1.4:8090",
+        "localhost:8090",
         "-t",
         "public"
       ],

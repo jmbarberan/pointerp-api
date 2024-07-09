@@ -540,6 +540,97 @@ class VentasController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function ventaCrearEliminadaAction() {
+    $datos = $this->request->getJsonRawBody();
+    try {      
+      $ret = (object) [
+        'res' => false,
+        'cid' => $datos->Id,
+        'ven' => null,
+        'msj' => 'Los datos no se pudieron procesar',
+        'num' => $datos->Numero
+      ];
+
+      $consumidorFinal = Registros::findFirst([
+        "conditions" => "TablaId = 5 and Indice = 14"
+      ]);
+      $this->response->setStatusCode(406, 'Not Acceptable');
+
+      $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
+      $ven = new Ventas();
+      $ven->Numero = $num;
+      $ven->Tipo = 11; // Factura
+      $ven->Fecha = new \DateTime();
+      $ven->SucursalId = $datos->SucursalId;
+      $ven->BodegaId = $datos->BodegaId;
+      $ven->Plazo = 0;
+      $ven->ClienteId = $consumidorFinal->Contenedor;
+      $ven->VendedorId = 0;
+      $ven->Notas = "Eliminado por contabilidad";
+      $ven->PorcentajeDescuento = 0;
+      $ven->PorcentajeVenta = 0;
+      $ven->Subtotal = 0;
+      $ven->SubtotalEx = 0;
+      $ven->Descuento = 0;
+      $ven->Recargo = 0;
+      $ven->Flete = 0;
+      $ven->Impuestos = 0;
+      $ven->Abonos = 0;
+      $ven->AbonosPf = 0;
+      $ven->Estado = 2;
+      $ven->Especie = 0; // receta, servicio medico
+      $ven->CEClaveAcceso = ""; // TODO generar fake con el secuencial especificado
+      $ven->CEAutorizacion = "";
+      $ven->CEAutorizaFecha = "";
+      $ven->CEContenido = "";
+      $ven->CEEtapa = 0;
+      $ven->CERespuestaId = 0;
+      $ven->CERespuestaTipo = $datos->Secuencial;
+      $ven->CERespuestaMsj = "Eliminado por contabilidad";
+      $ven->Comprobante = 0;
+      $ven->Contado = 0;
+      $ven->Operador = "Contador";
+      if ($ven->create()) {
+        $ret->res = true;
+        $ret->cid = $ven->Id;
+        $ret->num = $ven->Numero;
+        $ret->msj = "Se registro correctamente la transaccion";  
+        $ret->ven = Ventas::findFirstById($ret->cid);
+      } else {
+        $msj = "No se pudo crear el nuevo registro: " . "\n";
+        foreach ($ven->getMessages() as $m) {
+          $msj .= $m . "\n";
+        }
+        $ret->cid = 0;
+        $ret->msj = $msj;
+      }
+    } catch (Exception $e) {
+      $this->response->setStatusCode(500, 'Error');
+      $ret->cid = 0;
+      $ret->msj = $e->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+  
+  public function ventaPorSecuencialAction() {    
+    $num = $this->dispatcher->getParam('numero');
+    $rows = Ventas::find([
+      'conditions' => 'Tipo in (11, 12) AND CERespuestaTipo = :num: AND CEClaveAcceso is not null',
+      'bind' => [ 'num' => $num ]
+    ]);
+    if ($rows->count() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $rows = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
   public function ventaTraerSecuencialAction() {
     $tipo = $this->dispatcher->getParam('tipo');
     $sucursal = $this->dispatcher->getParam('sucursal');
@@ -548,7 +639,7 @@ class VentasController extends ControllerBase  {
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($num));
     $this->response->send();
-  }
+  }  
   #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {

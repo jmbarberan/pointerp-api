@@ -80,8 +80,21 @@ class MaestrosController extends ControllerBase  {
       'bind' => [ 'fil' => $filtro ]
     ]);
     if ($rows->count() > 0) {
-      $this->response->setStatusCode(200, 'Ok => ' . $ex);
+      $this->response->setStatusCode(200, 'Ok');
     } else {
+      if ($atrib == 'Cedula') {
+        $nombres = buscarCedulaExterno($filtro);
+        if ($nombres != '') {
+          $cli = new Clientes()
+          $cli->Id = 0;
+          $cli->Cedula = $filtro;
+          $cli->Nombres = $nombres;
+          $cli->Estado = 0;
+        }
+        $rows = [
+          $cli;
+        ]
+      }
       $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
@@ -216,8 +229,15 @@ class MaestrosController extends ControllerBase  {
 
   public function buscarCedulaSRIAction() {
     $ident = $this->dispatcher->getParam('identificacion');
+    $nombre = buscarCedulaExterno($ident)
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($nombre));
+    $this->response->send();
+  }
+
+  private function buscarCedulaExterno($cedula) {
     $nombre = '';
-    $url = getenv('URL_SRIQRY_BASE') . $ident . getenv('URL_SRIQRY_PARAMS');
+    $url = getenv('URL_SRIQRY_BASE') . $cedula . getenv('URL_SRIQRY_PARAMS');
     
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -237,9 +257,7 @@ class MaestrosController extends ControllerBase  {
     if ($nombreComercial !== null) {
         $nombre = $nombreComercial;
     }
-    $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($nombre));
-    $this->response->send();
+    return $nombre;
   }
   #endregion
 

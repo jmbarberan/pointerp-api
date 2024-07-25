@@ -693,7 +693,7 @@ class VentasController extends ControllerBase  {
         }
         $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
       } else {
-        $msj = "No se pudo crear el nuevo registro: " . "\n";
+        $msj = "No se pudo crear el nuevo registro: \n";
         foreach ($ven->getMessages() as $m) {
           $msj .= $m . "\n";
         }

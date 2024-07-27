@@ -72,6 +72,9 @@ class ComprobantesElectronicos {
     $impsQry = Impuestos::find([
       'conditions' => 'Estado = 0'
     ]);
+    $impCero = Impuestos::findFirst([
+      'conditions' => 'Porcentaje = 0'
+    ]);
     foreach ($impsQry as $imp) {
       $impuestosAr[$imp->id] = $imp;
     }
@@ -272,53 +275,53 @@ class ComprobantesElectronicos {
       $detalles = $factura->appendChild($detalles);
 
     foreach ($comprobante->relItems as $vi) {
-      //$numerolinea = 0;
-
       $subtotal = doubleval($vi->Cantidad) * doubleval($vi->Precio);
       $detalle = $xml->createElement('detalle');
       $detalle = $detalles->appendChild($detalle);
-      $cbc = $xml->createElement('codigoPrincipal', $vi->relProducto->Codigo);
-      $cbc = $detalle->appendChild($cbc);
-      $cbc = $xml->createElement('descripcion', $vi->relProducto->Nombre);
-      $cbc = $detalle->appendChild($cbc);
-      $cbc = $xml->createElement('cantidad', number_format($vi->Cantidad, 0, ".", ""));
-      $cbc = $detalle->appendChild($cbc);
-      $cbc = $xml->createElement('precioUnitario', number_format($vi->Precio, 2, ".", ""));
-      $cbc = $detalle->appendChild($cbc);
-      $cbc = $xml->createElement('precioTotalSinImpuesto', number_format($subtotal, 2, ".", ""));
-      $cbc = $detalle->appendChild($cbc);
+      $item = $xml->createElement('codigoPrincipal', $vi->relProducto->Codigo);
+      $item = $detalle->appendChild($item);
+      $item = $xml->createElement('descripcion', $vi->relProducto->Nombre);
+      $item = $detalle->appendChild($item);
+      $item = $xml->createElement('cantidad', number_format($vi->Cantidad, 0, ".", ""));
+      $item = $detalle->appendChild($item);
+      $item = $xml->createElement('precioUnitario', number_format($vi->Precio, 2, ".", ""));
+      $item = $detalle->appendChild($item);
+      $item = $xml->createElement('precioTotalSinImpuesto', number_format($subtotal, 2, ".", ""));
+      $item = $detalle->appendChild($item);
 
+      $impuestoRegistrado = false;
+      $crearConImpuesto = count($vi->relProducto->relImposiciones) > 0 && $impuestoVigente->Porcentaje > 0;
       $impuestos = $xml->createElement('impuestos');
       $impuestos = $detalle->appendChild($impuestos);
-
-      if (count($vi->relProducto->relImposiciones) == 0) {
-        // sin impuestos
-        $impuesto = $xml->createElement('impuesto');
-        $impuesto = $impuestos->appendChild($impuesto);
-        $cbc = $xml->createElement('codigo', $impuestoVigente->CodigoEmision);
-        $cbc = $impuesto->appendChild($cbc);
-        $cbc = $xml->createElement('codigoPorcentaje', '0');
-        $cbc = $impuesto->appendChild($cbc);
-        $cbc = $xml->createElement('tarifa', '0');
-        $cbc = $impuesto->appendChild($cbc);
-        $cbc = $xml->createElement('valor', '0');
-        $cbc = $impuesto->appendChild($cbc);
-      } else {
+      if ($crearConImpuesto) {
         foreach($vi->relProducto->relImposiciones as $im) {
           $impuestoItem = $impuestosAr[$im->ImpuestoId];
           $impuesto = $xml->createElement('impuesto');
           $impuesto = $impuestos->appendChild($impuesto);
-          $cbc = $xml->createElement('codigo', $impuestoItem->CodigoEmision);
-          $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('codigoPorcentaje', $impuestoItem->CodigoPorcentaje);
-          $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('tarifa', $impuestoItem->Porcentaje);
-          $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('baseImponible', number_format($subtotal, 2, ".", ""));
-          $cbc = $impuesto->appendChild($cbc);
-          $cbc = $xml->createElement('valor', number_format((($subtotal * $impuestoItem->Porcentaje) / 100), 2, ".", ""));
-          $cbc = $impuesto->appendChild($cbc);
+          $cbv = $xml->createElement('codigo', $impuestoItem->CodigoEmision);
+          $cbv = $impuesto->appendChild($cbv);
+          $cbv = $xml->createElement('codigoPorcentaje', $impuestoItem->CodigoPorcentaje);
+          $cbv = $impuesto->appendChild($cbv);
+          $cbv = $xml->createElement('tarifa', $impuestoItem->Porcentaje);
+          $cbv = $impuesto->appendChild($cbv);
+          $cbv = $xml->createElement('baseImponible', number_format($subtotal, 2, ".", ""));
+          $cbv = $impuesto->appendChild($cbv);
+          $cbv = $xml->createElement('valor', number_format(($subtotal * $impuestoItem->Porcentaje) / 100, 2, ".", ""));
+          $cbv = $impuesto->appendChild($cbv);
+          $impuestoRegistrado = true;
         }
+      } 
+      if ($impuestoRegistrado) {
+        $impuesto = $xml->createElement('impuesto');
+        $impuesto = $impuestos->appendChild($impuesto);
+        $cbc = $xml->createElement('codigo', $impCero->CodigoEmision);
+        $cbc = $impuesto->appendChild($cbc);
+        $cbc = $xml->createElement('codigoPorcentaje', $impCero->CodigoPorcentaje);
+        $cbc = $impuesto->appendChild($cbc);
+        $cbc = $xml->createElement('tarifa', $impCero->Porcentaje);
+        $cbc = $impuesto->appendChild($cbc);
+        $cbc = $xml->createElement('valor', '0');
+        $cbc = $impuesto->appendChild($cbc);
       }
     }
 
@@ -547,7 +550,7 @@ class ComprobantesElectronicos {
     $tipoDatos = (object) [
       'tipoDocumento' => '01', // 01: FACTURA
       'tipoEmision' => '1',  // OFFLINE UNICO VALOR VALIDO
-      'ambiente' => '2' // 1: PRUEBAS; 2: PRODUCCION
+      'ambiente' => '1' // 1: PRUEBAS; 2: PRODUCCION
     ];
     $empresaContribuyente = (object) [
       'empresaId' => $comprobante->relCliente->EmpresaId,

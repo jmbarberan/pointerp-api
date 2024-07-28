@@ -108,6 +108,8 @@ class VentasController extends ControllerBase  {
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
+        'cve' => '',
+        'sec' => '',
         'ven' => null,
         'msj' => 'Los datos no se pudieron procesar',
         'num' => $datos->Numero
@@ -272,11 +274,14 @@ class VentasController extends ControllerBase  {
         }
 
         if (!$vendoble) {
-          if ($generarCA) {
-            $cveAcceso = $this->generarClaveAcceso($datos->SucursalId);
-            $datos->CEClaveAcceso = $cveAcceso;
+          if ($generarCA && $datos->Tipo == 11) {
+            $res = $this->generarClaveAcceso($datos->SucursalId);
+            $datos->CEClaveAcceso = $res->clave;
+            $datos->CERespuestaTipo = $res->secuencial;
           }
           $ret = $this->guardarVentaNueva($datos, 0, false);
+          $ret->cve = $ret->CEClaveAcceso;
+          $ret->sec = $ret->CERespuestaTipo;
           if ($ret->res) {
             $this->response->setStatusCode(201, 'Ok');
           }
@@ -321,6 +326,8 @@ class VentasController extends ControllerBase  {
     $ret = (object) [
       'res' => false,
       'cid' => 0,
+      'cve' => '',
+      'sec' => '',
       'ven' => null,
       'msj' => 'Error al crear',
       'num' => 0
@@ -341,11 +348,14 @@ class VentasController extends ControllerBase  {
 
     if (!$vendoble) {
       $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
-      if ($generarCA) {
-        $cveAcceso = $this->generarClaveAcceso($datos->SucursalId);
-        $datos->CEClaveAcceso = $cveAcceso;
+      if ($generarCA && $datos->Tipo == 11) {
+        $res = $this->generarClaveAcceso($datos->SucursalId);
+        $datos->CEClaveAcceso = $res->clave;
+        $datos->CERespuestaTipo = $res->secuencial;
       }
       $ret = $this->guardarVentaNueva($datos, $cobrado, false);
+      $ret->cve = $ret->CEClaveAcceso;
+      $ret->sec = $ret->CERespuestaTipo;
       if ($ret->res) {
         $vta = $ret->ven;
         $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
@@ -664,6 +674,8 @@ class VentasController extends ControllerBase  {
     $ret = (object) [
       'res' => false,
       'cid' => 0,
+      'cve' => '',
+      'sec' => '',
       'ven' => null,
       'msj' => 'Error al crear',
       'num' => 0
@@ -709,7 +721,7 @@ class VentasController extends ControllerBase  {
         $ven->CEContenido = $datos->CEContenido;
         $ven->CEEtapa = $datos->CEEtapa;
         $ven->CERespuestaId = $datos->CERespuestaId;
-        $ven->CERespuestaTipo = $datos->CERespuestaTipo;
+        $ven->CERespuestaTipo = strval($datos->CERespuestaTipo);
         $ven->CERespuestaMsj = $datos->CERespuestaMsj;
         $ven->Comprobante = $datos->Comprobante;
         $ven->Contado = $cobrado > 0 ? 1 : 0;
@@ -745,8 +757,7 @@ class VentasController extends ControllerBase  {
             $ins->Valor = $im->Valor;
             $ins->create();
           }
-          $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
-
+          $ret->ven = $ven; //$min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
         } else {
           $msj = "No se pudo crear el nuevo registro: " . "\n";
           foreach ($ven->getMessages() as $m) {
@@ -895,23 +906,27 @@ class VentasController extends ControllerBase  {
   }
 
   private function calcularDigitoVerificadorCadena($cadena) {
-    $cadenaInversa = strrev($cadena);    
+    $cadenaInversa = '';
+    foreach (str_split($cadena) as $c) {
+        $cadenaInversa = $c . $cadenaInversa;
+    }
+
     $factor = 2;
     $res = 0;
-    if (strlen($cadenaInversa) > 0) {
-      for ($i = 0; $i < strlen($cadenaInversa); $i++)
-      {
-        $factor = $factor == 8 ? 2 : $factor;
-        $producto = intval(substr($cadenaInversa, $i, 1));
+
+    for ($i = 0; $i < strlen($cadenaInversa); $i++) {
+        $factor = ($factor == 8) ? 2 : $factor;
+        $producto = intval($cadenaInversa[$i]);
         $producto *= $factor;
         $factor++;
-        $res .=$producto;
-      }
-
-      $res = 11 - $res % 11;
-      $res = $res == 11 ? 0 : $res;
-      $res = $res == 10 ? 1 : $res;
+        $res += $producto;
     }
+
+    $res = 11 - $res % 11;
+
+    if ($res == 11) $res = 0;
+    if ($res == 10) $res = 1;
+
     return $res;
   }
 
@@ -925,14 +940,14 @@ class VentasController extends ControllerBase  {
     $d = $f->format("d");
     $calf = intval($y) * intval($m) * intval($d);
     $calh = intval($h) * intval($t) * intval($s);
-    $generado = rand(1, 101);
+    $generado = rand(1, 99);
     return strval($calf) . strval($calh) . strval($generado);
   }
 
   private function generarClaveAcceso($sucursalId) {
     #region Secuencial
-    $sucursal = Sucursales::findFirst($sucursalId);
-    $empresa = Empresas::findFirst($sucursal->EmpresaId);
+    $sucursal = Sucursales::findFirstById($sucursalId);
+    $empresa = Empresas::findFirstById($sucursal->EmpresaId);
     $serie = $sucursal->Codigo . trim($sucursal->Descripcion);
     $paramFaEmpresa = EmpresaParametros::findFirst([
       'conditions' => "Tipo = 1 AND Referencia = 11 AND EmpresaId = {$empresa->Id}" 
@@ -948,7 +963,7 @@ class VentasController extends ControllerBase  {
     $ruc = "9999999999999";
     if (isset($empresa)) {
       $ruc = $empresa->Ruc;
-      $reg = Registros::findFirst($empresa->TipoAmbiente);
+      $reg = Registros::findFirstById($empresa->TipoAmbiente);
       if (isset($reg))
         $tipoDatos->ambiente = $reg->Codigo;
     }
@@ -956,23 +971,36 @@ class VentasController extends ControllerBase  {
 
     #region Clave de acceso
     
+    $numSig = intval($paramFaEmpresa->Indice);
+    $numSig = $numSig + 1;
     $fecha = new \DateTime();
+    $codigoAleatorio = self::codigoAleatorio();
+    if (strlen($codigoAleatorio) > 8) {
+      $codigoAleatorio = substr($codigoAleatorio, -8);
+    } else {
+      if (strlen($codigoAleatorio < 8)) {
+        $codigoAleatorio = str_pad($codigoAleatorio, 8, "1", STR_PAD_LEFT);
+      }
+    }
     $clave = $fecha->format("dmY") .
       $tipoDatos->tipoDocumento .
       $ruc .
       $tipoDatos->ambiente .
       $serie .
-      str_pad(strval($paramFaEmpresa->Indice), 9, "0", STR_PAD_LEFT) .
-      str_pad(self::codigoAleatorio(), 8, "1", STR_PAD_LEFT) .
+      str_pad(strval($numSig), 9, "0", STR_PAD_LEFT) .
+      $codigoAleatorio .
       $tipoDatos->tipoEmision;
     $clave .= strval(self::calcularDigitoVerificadorCadena($clave));
     #endregion
 
-    $numSig = intval($paramFaEmpresa->Indice);
-    $numSig++;
     $paramFaEmpresa->Indice = $numSig;
     $paramFaEmpresa->update();
 
-    return $clave;
+    $retorno = (object) [
+      'clave' => $clave,
+      'secuencial' => $numSig
+    ];
+
+    return $retorno;
   }
 }

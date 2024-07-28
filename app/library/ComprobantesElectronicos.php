@@ -1,54 +1,23 @@
 <?php
 
-/*include APP_PATH . '/library/FirmaElectronica.php';
-use sasco\LibreDTE\FirmaElectronica;*/
-
-/*include APP_PATH . '/library/Exception/XmlSignatureValidatorException.php';
-include APP_PATH . '/library/xmlsign/Utils/XPath.php';
-include APP_PATH . '/library/xmlsign/XmlSecEnc.php';
-include APP_PATH . '/library/xmlsign/XmlSecurityDSig.php';
-include APP_PATH . '/library/xmlsign/XmlSecurityKey.php';
-
-use RobRichards\XMLSecLibs\XMLSecurityDSig;
-use RobRichards\XMLSecLibs\XMLSecurityKey;*/
-
-/*use Selective\XmlDSig\DigestAlgorithmType;
-use Selective\XmlDSig\XmlSigner;*/
-
-//require $_SERVER['DOCUMENT_ROOT'] . '/vendor/robrichards/xmlseclibs/src/XMLSecurityDSig.php';
-
 use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Impuestos;
+use Pointerp\Modelos\Maestros\Registros;
 use RobRichards\XMLSecLibs\XMLSecurityDSig;
 use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 class ComprobantesElectronicos {
 
-  static $db = null;
+  private static $certificado = "";
+  private static $password = "";
 
-  static function calcularDigitoVerificadorCadena($cadena) {
-    $cadenaInversa = strrev($cadena);    
-    $factor = 2;
-    $res = 0;
-    if (strlen($cadenaInversa) > 0) {
-      for ($i = 0; $i < strlen($cadenaInversa); $i++)
-      {
-        $factor = $factor == 8 ? 2 : $factor;
-        $producto = intval(substr($cadenaInversa, $i, 1));
-        $producto *= $factor;
-        $factor++;
-        $res .=$producto;
-      }
-
-      $res = 11 - $res % 11;
-      $res = $res == 11 ? 0 : $res;
-      $res = $res == 10 ? 1 : $res;
-    }
-    return $res;
+  public static function cargarCertificado($certPath, $certPass) {
+    self::$certificado = $certPath;
+    self::$password = $certPass;
   }
 
-  static function codigoAleatorio() {
+  private static function codigoAleatorio() {
     $f = new \DateTime();
     $h = $f->format("H");
     $t = $f->format("i");
@@ -62,13 +31,39 @@ class ComprobantesElectronicos {
     return strval($calf) . strval($calh) . strval($generado);
   }
 
-  static function crearXmlFactura($comprobante, $tipoDatos, $contribuyente) {
+  public static function autorizarFactura($comprobante) {
+    $xmlFactura = self::crearXmlFactura($comprobante);
+    if (isset($xmlFactura)) {
+      $xmlFirmado = self::firmarXml($xmlFactura, self::$certificado, self::$password);
+      if (isset($xmlFirmado)) {
+        $respEnvio = self::enviar($xmlFirmado);
+        if (isset($respEnvio)) {
+          // verificar y dar resultado
+          //
+        }
+      }
+    }
+  }
+
+  private static function crearXmlFactura($comprobante) {
+    $contribuyente = Empresas::findFirstById($comprobante->relCliente->EmpresaId);
+    $tipoDatos = (object) [
+      'tipoDocumento' => '01', // 01: FACTURA
+      'tipoEmision' => '1',  // OFFLINE UNICO VALOR VALIDO
+      'ambiente' => '1' // 1: PRUEBAS; 2: PRODUCCION
+    ];
+    #region Ambiente
+    if (isset($contribuyente)) {
+      $reg = Registros::findFirstById($contribuyente->TipoAmbiente);
+      if (isset($reg))
+        $tipoDatos->ambiente = $reg->Codigo;
+    }
     // traer datos del impuesto vigente
     $paramFaEmpresa = EmpresaParametros::findFirst([
-      'conditions' => "EmpresaId = {$comprobante->relCliente->EmpresaId} and Tipo = 1"      
+      'conditions' => "EmpresaId = {$comprobante->relCliente->EmpresaId} AND Tipo = 1"      
     ]);    
     // traer todos los impuestos a un arreglo indexado
-    $impuestosAr = array();
+    $impuestosAr = [];
     $impsQry = Impuestos::find([
       'conditions' => 'Estado = 0'
     ]);
@@ -76,7 +71,7 @@ class ComprobantesElectronicos {
       'conditions' => 'Porcentaje = 0'
     ]);
     foreach ($impsQry as $imp) {
-      $impuestosAr[$imp->id] = $imp;
+      $impuestosAr[$imp->Id] = $imp;
     }
     $impuestoVigente = $impuestosAr[$paramFaEmpresa->RegistroId];
     $formaPago = "01";
@@ -85,72 +80,21 @@ class ComprobantesElectronicos {
     $tipoIdent = "07";    
     if ($comprobante->relCliente->IdentificacionTipo > 0)
     {
-      $con = self::$db->fetchAll(
+      $tipoReg = Registros::findFirst([
+        "conditions" => "Id = {$comprobante->relCliente->IdentificacionTipo}"
+      ]);
+      /*$con = self::$db->fetchAll(
         "SELECT Id, Codigo, Denominacion " .
         "FROM registros " . 
-        "Where id = " . strval($comprobante->relCliente->IdentificacionTipo)
+        "Where id = " . 
       );
       if (count($con) > 0) {
         $con = reset($con);
         $tipoIdent = $con["Codigo"];
+      }*/
+      if (isset($tipoReg)) {
+        $tipoIdent = $tipoReg->Codigos;
       }
-    }
-    #endregion    
-    
-    #region Secuencial
-    $serie = $comprobante->relSucursal->Codigo . trim($comprobante->relSucursal->Descripcion);
-    $secuencialExiste = false;
-    try
-    {
-      $secuencialExiste = intval($comprobante->CERespuestaTipo) > 0;
-    }
-    catch (Exception $e) { }
-
-    $secuencial = 1;
-    if ($secuencialExiste) {
-      if (!str_contains($comprobante->CEContenido, "SECUENCIAL REGISTRADO")) {
-        $secuencial = 0;
-      } else {
-          $secuencial = intval($comprobante->CERespuestaTipo);
-          $secuencial = $secuencial <= 0 ? 1 : $secuencial;
-      }
-    } else {
-      $secuencial = 0;
-    }
-    if ($secuencial <= 0) {
-      $ret = 1;
-      $conSec = self::$db->fetchAll(
-        "SELECT Indice " .
-        "FROM empresaparametros " . 
-        "Where Tipo = 1 AND Referencia = 11 AND Estado = 0 AND EmpresaId = " . strval($contribuyente->empresaId)
-      );
-      if (count($conSec) > 0) {
-        $conSec = reset($conSec);
-        $ret = $conSec["Indice"];
-      }
-      $secuencial = $ret;
-    }
-    #endregion
-
-    #region Clave de acceso
-    //$tipoDocumento = $tipoDatos->tipoDocumento; // 01 = Factura, 04 = NOTA CREDITO, 05 = NOTA DEBITO, 06 = GUIA REMISION, 07 = RETENCION
-    //$tipoEmision = $tipoDatos->tipoEmision; // Unico valor disponible en metodo OFFLINE
-    $clave = "";
-    if (!strlen($comprobante->CEClaveAcceso) > 0) {
-      if (strpos($comprobante->CEContenido, "ERROR EN LA ESTRUCTURA DE LA CLAVE DE ACCESO") !== false)
-        $clave = $comprobante->CEClaveAcceso;
-    }
-    if (strlen($clave) <= 0) {
-      $fecha = new \DateTime($comprobante->Fecha);
-      $clave = $fecha->format("dmY") .
-        $tipoDatos->tipoDocumento .
-        $contribuyente->ruc .
-        $tipoDatos->ambiente .
-        $serie .
-        str_pad(strval($secuencial), 9, "0", STR_PAD_LEFT) .
-        str_pad(self::codigoAleatorio(), 8, "1", STR_PAD_LEFT) .
-        $tipoDatos->tipoEmision;
-      $clave .= strval(self::calcularDigitoVerificadorCadena($clave));
     }
     #endregion
 
@@ -169,13 +113,13 @@ class ComprobantesElectronicos {
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('tipoEmision', $tipoDatos->tipoEmision); // 
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('razonSocial', $contribuyente->razonSocial);
+      $cbc = $xml->createElement('razonSocial', $contribuyente->RazonSocial);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('nombreComercial', $contribuyente->nombreComercial);
+      $cbc = $xml->createElement('nombreComercial', $contribuyente->NombreComercial);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('ruc', $contribuyente->ruc);
+      $cbc = $xml->createElement('ruc', $contribuyente->Identificacion);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('claveAcceso', $clave);
+      $cbc = $xml->createElement('claveAcceso', $comprobante->CEClaveAcceso);
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('codDoc', $tipoDatos->tipoDocumento);
       $cbc = $infoTributaria->appendChild($cbc);
@@ -183,7 +127,7 @@ class ComprobantesElectronicos {
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('ptoEmi', $comprobante->relSucursal->Codigo);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('secuencial', $secuencial);
+      $cbc = $xml->createElement('secuencial', $comprobante->CERespuestaTipo);
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('dirMatriz', $comprobante->relSucursal->Direccion);
       $cbc = $infoTributaria->appendChild($cbc);
@@ -192,18 +136,23 @@ class ComprobantesElectronicos {
         $cbc = $infoTributaria->appendChild($cbc);
       }
 
-    // INFORMACION DE FACTURA.
+    // INFORMACION DE FACTURA.    
+      $obligadoContabilidad = 1;
+      $obligadoContabVal = $contribuyente->ObligadoContabilidad;
+      if ($obligadoContabVal != null) {
+        $obligadoContabilidad = $obligadoContabVal == 1 ? 0 : 1;
+      }
       $infoFactura = $xml->createElement('infoFactura');
       $infoFactura = $factura->appendChild($infoFactura);
       $cbc = $xml->createElement('fechaEmision', $comprobante->Fecha);
       $cbc = $infoFactura->appendChild($cbc);
       $cbc = $xml->createElement('dirEstablecimiento', $comprobante->relSucursal->Direccion);
       $cbc = $infoFactura->appendChild($cbc);
-      $cbc = $xml->createElement('contribuyenteEspecial', $contribuyente->contribuyenteEspecial);
+      $cbc = $xml->createElement('contribuyenteEspecial', $contribuyente->CEResolucion);
       $cbc = $infoFactura->appendChild($cbc);
-      $cbc = $xml->createElement('obligadoContabilidad', $contribuyente->obligadoContabilidad);
+      $cbc = $xml->createElement('obligadoContabilidad', $obligadoContabilidad);
       $cbc = $infoFactura->appendChild($cbc);
-      $cbc = $xml->createElement('tipoIdentificacionComprador', $comprobante->relCliente->relIdentificaTipo->Codigo);
+      $cbc = $xml->createElement('tipoIdentificacionComprador', $tipoIdent);
       $cbc = $infoFactura->appendChild($cbc);
       $cbc = $xml->createElement('razonSocialComprador', $comprobante->relCliente->Nombres);
       $cbc = $infoFactura->appendChild($cbc);
@@ -330,64 +279,40 @@ class ComprobantesElectronicos {
     return $strings_xml;
   }
 
-  static function firmarXml($xml, $file, $pass) {
-    //return $fe->getData()['serialNumber'];
-    //$rutapfx = __DIR__ . '/public/index.php'
-    /*$rutapfx = $_SERVER["DOCUMENT_ROOT"] .DIRECTORY_SEPARATOR.
-      'certs'.DIRECTORY_SEPARATOR. $pfx;*/
-      //use XmlSigner;    
-    /*$signer = new XmlSigner();
-    $signer->loadPfxFile($pfx, $pin);
-    return $signer->signXml($xml, 'sha1');*/
-    //return $objSec;
-
-
-    /*$doc = new DOMDocument();
-    //$doc->load(dirname(__FILE__) . '/basic-doc.xml');
-    $doc->loadXML($xml);
-
-    $objDSig = new XMLSecurityDSig();
-    $objDSig->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
-    $objDSig->addReference($doc, XMLSecurityDSig::SHA1, array('http://www.w3.org/2000/09/xmldsig#enveloped-signature'), array('force_uri' => true));
-    $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, array('type'=>'private'));
-    // load private key 
-    $objKey->loadKey($cert, TRUE);
-    // if key has Passphrase, set it using $objKey->passphrase = <passphrase> " 
-    $objDSig->sign($objKey);
-    // Add associated public key 
-    $objDSig->add509Cert(file_get_contents($cert));
-    $objDSig->appendSignature($doc->documentElement);
-    return $doc->saveXML();*/
-
+  private static function firmarXml($xml, $certFile, $certPass) {
     // Cargar el archivo .p12
-    $pkcs12 = file_get_contents($file);
-    if (!openssl_pkcs12_read($pkcs12, $certs, $pass)) {
+    $pkcs12 = file_get_contents($certFile);
+    if (!openssl_pkcs12_read($pkcs12, $certs, $certPass)) {
         throw new Exception("Error al leer el archivo .p12");
     }
     $privateKey = $certs['pkey'];
     $publicCert = $certs['cert'];
+
+    // Cargar el XML a firmar
     $doc = new DOMDocument();
     $doc->loadXML($xml);
+    // Crear una nueva firma
     $objDSig = new XMLSecurityDSig();
     $objDSig->setCanonicalMethod(XMLSecurityDSig::EXC_C14N);
     // Firmar todos los elementos del XML
     $objDSig->addReference(
         $doc, 
         XMLSecurityDSig::SHA1, 
-        array('http://www.w3.org/2000/09/xmldsig#enveloped-signature')
+        [ 'http://www.w3.org/2000/09/xmldsig#enveloped-signature' ]
     );
     // Crear una nueva clave de seguridad (llave privada)
-    $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, array('type' => 'private'));
+    $objKey = new XMLSecurityKey(XMLSecurityKey::RSA_SHA1, [ 'type' => 'private' ]);
     $objKey->loadKey($privateKey);
     // Agregar la firma al documento
     $objDSig->sign($objKey);
     // Agregar la clave pública al documento firmado
     $objDSig->add509Cert($publicCert);
+    // Anexar la firma al documento
     $objDSig->appendSignature($doc->documentElement);
+    // Devolver el XML firmado
     return $doc->saveXML();
-
   }
-  static function generarXades($xml, $params) {
+  private static function generarXades($xml, $params) {
     $sha1_factura = base64_encode(str_replace('<?xml version="1.0" encoding="UTF-8"?>\n', '', $xml));
     $xmlns = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
     $Certificate_number = self::codigoAleatorio();
@@ -517,15 +442,23 @@ class ComprobantesElectronicos {
         $xades_bes .= '</ds:Object>';
     $xades_bes .= '</ds:Signature>';
   }
-  public static function enviar($p) {
-    $p->firmardo;
-    $url = $p->url;
+  public static function enviar($xmlComprobante) {
+    $wsdl = "https://cel.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl";
+    
     try {
-      $client = new SoapClient($url, [ "trace" => 1 ] );
-      $result = $client->ResolveIP( [ "ipAddress" => $url, "licenseKey" => "0" ] );
-      print_r($result);
-    } catch ( SoapFault $e ) {
-      echo $e->getMessage();      
+        // Crear el cliente SOAP
+        $client = new SoapClient($wsdl);
+        // Crear el parámetro de la solicitud
+        $params = array('xml' => $xmlComprobante);
+        // Llamar al método 'validarComprobante' del servicio web
+        $response = $client->__soapCall('validarComprobante', array($params));
+        // Retornar la respuesta del servicio web
+        $responseXml = $response->RespuestaRecepcionComprobante;
+        // Escribir la respuesta en un archivo XML
+        file_put_contents("repuesta.xml", $responseXml);
+    } catch (SoapFault $fault) {
+        // Manejar errores
+        return "Error: {$fault->faultcode}, {$fault->faultstring}";
     }
   }
 
@@ -533,7 +466,7 @@ class ComprobantesElectronicos {
     return false;
   }
 
-  public static function procesarFactura($comprobante, $pdb) {
+  private static function procesarFactura($comprobante, $pdb) {
     $emp = Empresas::findById($comprobante->relCliente->EmpresaId);
     $paramFaEmpresa = EmpresaParametros::findFirst([
       'conditions' => "EmpresaId = {$comprobante->relCliente->EmpresaId} and Tipo = 1"      
@@ -576,7 +509,7 @@ class ComprobantesElectronicos {
     return $frm;
   }
 
-  public static function ExtraerCertificado($rutapfx, $pass, $code) {
+  private static function ExtraerCertificado($rutapfx, $pass, $code) {
     $res = [];
     $pfx = file_get_contents($rutapfx);
     $openSSL = openssl_pkcs12_read($pfx, $res, $pass);
@@ -589,6 +522,6 @@ class ComprobantesElectronicos {
     // this is the PEM FILE
     $cert = $res['cert'].implode('', $res['extracerts']);
     file_put_contents(APP_PATH . '\files\sign\KEY' . $code . '.pem', $cert);
-  }
+  }  
 }
 

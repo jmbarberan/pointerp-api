@@ -105,6 +105,7 @@ class VentasController extends ControllerBase  {
     try {
       $datos = $this->request->getJsonRawBody();
       $generarCA = $this->request->getQuery('generarCA', null, false);
+      $autorizar = $this->request->getQuery('autorizar', null, false);
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
@@ -280,9 +281,16 @@ class VentasController extends ControllerBase  {
             $datos->CERespuestaTipo = $res->secuencial;
           }
           $ret = $this->guardarVentaNueva($datos, 0, false);
-          $ret->cve = $ret->CEClaveAcceso;
-          $ret->sec = $ret->CERespuestaTipo;
           if ($ret->res) {
+            if ($autorizar) {
+              require_once APP_PATH . '/library/ComprobantesElectronicos.php';
+              try {
+                \ComprobantesElectronicos::autorizarFactura($ret->ven);
+              } catch (Exception $e) {
+                $this->response->setStatusCode(500, 'Error');  
+                $msj = $e->getMessage();
+              }
+            }
             $this->response->setStatusCode(201, 'Ok');
           }
         } else {
@@ -354,8 +362,6 @@ class VentasController extends ControllerBase  {
         $datos->CERespuestaTipo = $res->secuencial;
       }
       $ret = $this->guardarVentaNueva($datos, $cobrado, false);
-      $ret->cve = $ret->CEClaveAcceso;
-      $ret->sec = $ret->CERespuestaTipo;
       if ($ret->res) {
         $vta = $ret->ven;
         $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
@@ -758,6 +764,8 @@ class VentasController extends ControllerBase  {
             $ins->create();
           }
           $ret->ven = $ven; //$min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
+          $ret->cve = $datos->CEClaveAcceso;
+          $ret->sec = $datos->CERespuestaTipo;
         } else {
           $msj = "No se pudo crear el nuevo registro: " . "\n";
           foreach ($ven->getMessages() as $m) {

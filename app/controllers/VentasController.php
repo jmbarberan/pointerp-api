@@ -117,7 +117,7 @@ class VentasController extends ControllerBase  {
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
       $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
-      $datos->Fecha = str_replace('Z', '', $datos->Fecha); 
+      $datos->Fecha = str_replace('Z', '', $datos->Fecha);
       // Si el cliente id es 0 crearlo
       if (isset($datos->relCliente)) {
         $cliente = $datos->relCliente;
@@ -285,6 +285,10 @@ class VentasController extends ControllerBase  {
             if ($autorizar) {
               require_once APP_PATH . '/library/ComprobantesElectronicos.php';
               try {
+                $paramCert = EmpresaParametros::findFirst([
+                  'conditions' => "Tipo = 19 AND EmpresaId = {$ret->ven->relCliente->EmpresaId}"
+                ]);
+                \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
                 \ComprobantesElectronicos::autorizarFactura($ret->ven);
               } catch (Exception $e) {
                 $this->response->setStatusCode(500, 'Error');  
@@ -691,7 +695,12 @@ class VentasController extends ControllerBase  {
     $this->db->begin();
     try {
       if ($datos->ClienteId <= 0) {
-        $resp = $this->crearCliente($datos->ClienteNav);
+        if (!isset($datos->ClienteNav)) {
+          $resp = $this->crearCliente($datos->relCliente);
+        } else {
+          $resp = $this->crearCliente($datos->ClienteNav);
+        }
+        
         if (strlen($resp) > 0) {
           $ret->msj = "Error al crear el cliente: {$resp}";
           $guardar = false;

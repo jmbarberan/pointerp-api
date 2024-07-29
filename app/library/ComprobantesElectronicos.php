@@ -1,5 +1,7 @@
 <?php
 
+
+
 use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Impuestos;
@@ -279,11 +281,14 @@ class ComprobantesElectronicos {
     return $strings_xml;
   }
 
-  private static function firmarXml($xml, $certFile, $certPass) {
-    // Cargar el archivo .p12
+  private static function firmarXml($xml, $certPath, $certPass) {
+    $certFileName = basename($certPath);
+    $certFile = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . 'certs' . DIRECTORY_SEPARATOR. $certFileName;
+    $pass = base64_decode($certPass);
+
     $pkcs12 = file_get_contents($certFile);
-    if (!openssl_pkcs12_read($pkcs12, $certs, $certPass)) {
-        throw new Exception("Error al leer el archivo .p12");
+    if (!openssl_pkcs12_read($pkcs12, $certs, $pass)) {
+        throw new Exception("Error al leer el archivo certificado");
     }
     $privateKey = $certs['pkey'];
     $publicCert = $certs['cert'];
@@ -502,7 +507,7 @@ class ComprobantesElectronicos {
       $pass = base64_decode($paramFaEmpresa->Extendido);
     }
     
-    $xml = self::crearXmlFactura($comprobante, $tipoDatos, $empresaContribuyente);
+    $xml = self::crearXmlFactura($comprobante);
     $frm = self::firmarXml($xml, $archivoCert, $pass);
     file_put_contents('fa_' . strval($comprobante->Numero) . '.xml', "\xEF\xBB\xBF".  $frm);
     

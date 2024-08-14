@@ -496,30 +496,21 @@ class VentasController extends ControllerBase  {
   }
 
   public function ventaAutorizarAction() {
-    //$db = DI::getDefault()->getDb();
     $id = $this->dispatcher->getParam('id');
     $ven = Ventas::findFirstById($id);
     if ($ven != false) {
       require_once APP_PATH . '/library/ComprobantesElectronicos.php';
-      //$ce = new \ComprobantesElectronicos();
       try {
-        //$msj = \ComprobantesElectronicos::procesarFactura($ven, $db);
-        //$msj = "Procesado correctamente";
+        $paramCert = EmpresaParametros::findFirst([
+          'conditions' => "Tipo = 19 AND EmpresaId = {$ven->relCliente->EmpresaId}"
+        ]);
+        \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
+        // validar si tiene secuencial y clave de accceso y no tiene error: SECUENCIAL REGISTRADO
+        \ComprobantesElectronicos::autorizarFactura($ven);
       } catch (Exception $e) {
         $this->response->setStatusCode(500, 'Error');  
         $msj = $e->getMessage();
       }
-      /*$ven->estado = $est;
-      if($ven->update()) {
-        $msj = "La operacion se ejecuto exitosamente";
-        $this->response->setStatusCode(200, 'Ok');
-      } else {
-        $this->response->setStatusCode(404, 'Error');
-        $msj = "No se puede actualizar los datos: " . "\n";
-        foreach ($ven->getMessages() as $m) {
-          $msj .= $m . "\n";
-        }
-      }*/
     } else {
       $msj = "No se encontro el registro";
       $this->response->setStatusCode(404, 'Not found');
@@ -527,7 +518,6 @@ class VentasController extends ControllerBase  {
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($msj));
     $this->response->send();
-    echo var_dump($msj);
   }
 
   public function ventaActualizarEstadoCEAction() {
@@ -659,7 +649,7 @@ class VentasController extends ControllerBase  {
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($num));
     $this->response->send();
-  }  
+  }
   #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {

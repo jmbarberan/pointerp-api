@@ -979,7 +979,22 @@ class VentasController extends ControllerBase  {
     #region Clave de acceso
     
     $numSig = intval($paramFaEmpresa->Indice);
-    $numSig = $numSig + 1;
+    // buscar el numero q siguiente q no existe
+    $existe = true; 
+    while($existe) {
+      $numSig++;
+      $rows = Ventas::find([
+        'conditions' => 'Tipo in (11, 12) AND CERespuestaTipo = :num: AND SucursalId = :suc: AND CEClaveAcceso is not null',
+        'bind' => [ 
+            'num' => $numSig, 
+            'suc' => $sucursalId 
+          ]
+      ]);
+      if ($rows->count() >= 0) {
+        $existe = false;
+      }
+    }
+    
     $fecha = new \DateTime();
     $codigoAleatorio = self::codigoAleatorio();
     if (strlen($codigoAleatorio) > 8) {

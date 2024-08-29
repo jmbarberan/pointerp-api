@@ -1,20 +1,20 @@
 <?php
 
-
-
 use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\Maestros\Registros;
-/*use RobRichards\XMLSecLibs\XMLSecurityDSig;
-use RobRichards\XMLSecLibs\XMLSecurityKey;*/
-/*use phpseclib3\File\X509;
-use phpseclib3\Crypt\PublicKeyLoader;
-use phpseclib3\Math\BigInteger;*/
 
-require_once APP_PATH . '/library/sha256.php';
+require(APP_PATH . '/library/CryptoToolKit/CryptoToolKitInterface.php');
+require(APP_PATH . '/library/CryptoToolKit/OpenSSL.php');
+require(APP_PATH . '/library/Signature/SignatureInterface.php');
+require(APP_PATH . '/library/Signature/DOMToolKit.php');
+require(APP_PATH . '/library/Signature/XMLDsig.php');
+require(APP_PATH . '/library/Signature/XAdESBES.php');
+require(APP_PATH . '/library/XMLSecLibs.php');
 
-//include("../library/sha256.php");
+use PacoP\XMLSecLibs\XMLSecLibs;
+use PacoP\XMLSecLibs\CryptoToolKit\OpenSSL;
 
 class ComprobantesElectronicos {
 
@@ -26,21 +26,13 @@ class ComprobantesElectronicos {
     self::$password = $certPass;
   }
 
-  private static function codigoAleatorio() {
-    $f = new \DateTime();
-    $h = $f->format("H");
-    $t = $f->format("i");
-    $s = $f->format("s");
-    $y = $f->format("Y");
-    $m = $f->format("m");
-    $d = $f->format("d");
-    $calf = intval($y) * intval($m) * intval($d);
-    $calh = intval($h) * intval($t) * intval($s);
-    $generado = rand(1, 101);
-    return strval($calf) . strval($calh) . strval($generado);
-  }
-
   public static function autorizarFactura($comprobante) {
+    $ret = (object) [
+      'respuesta' => false,
+      'titulo' => '',
+      'mensaje' => 'Los datos no se pudieron procesar',
+      'comprobante' => null
+    ];
     $ambiente = '1';
     $contribuyente = Empresas::findFirstById($comprobante->relCliente->EmpresaId);
     #region Ambiente
@@ -49,17 +41,25 @@ class ComprobantesElectronicos {
       if (isset($reg))
         $ambiente = $reg->Codigo;
     }
-    $xmlFactura = self::crearXmlFactura($comprobante);
+    $xmlFactura = self::crearXmlFactura($comprobante);    
     if (isset($xmlFactura)) {
-      $xmlFirmado = self::crearFirmaXades($xmlFactura);
+      $type = 'http://uri.etsi.org/01903/v1.3.2#';
+      $crypto = new OpenSSL(BASE_PATH . '/certs/' . self::$certificado, self::$password, "PKCS12");
+      $xmlsec = new XMLSecLibs();
+      $options = ['timezone' => 'America/Guayaquil'];
+      $xmlsec->setDigestMethod('http://www.w3.org/2001/04/xmlenc#sha256');
+      $xmlsec->setSignatureMethod('http://www.w3.org/2000/09/xmldsig#rsa-sha1');
+      $xmlFirmado = $xmlsec->sign($xmlFactura, $type, $crypto, $options);
       if (isset($xmlFirmado)) {
         $respEnvio = self::enviar($xmlFirmado, $ambiente);
         if (isset($respEnvio)) {
+          // recibido o devuelta
           $res = self::verificar($comprobante->CEClaveAcceso, $ambiente);
-
         }
+        // guardar el resultado de la autorizacion sea aprobado o rechazado
       }
     }
+    return $res;
   }
 
   private static function crearXmlFactura($comprobante) {
@@ -291,256 +291,6 @@ class ComprobantesElectronicos {
     $strings_xml = $xml->saveXML();
     return $strings_xml;
   }
-
-  private static function crearFirmaXades($comprobante) {
-    $comprobante = preg_replace('/\s+/', ' ', $comprobante);
-    $comprobante = trim($comprobante);
-    $comprobante = preg_replace('/(?<=\>)(\r?\n)/', '', $comprobante);
-    $comprobante = trim($comprobante);
-    $comprobante = preg_replace('/(?<=\>)(\s*)/', '', $comprobante);
-    $comprobante = trim($comprobante);
-
-    $certFileName = basename(self::$certificado);
-    $certFile = $_SERVER["DOCUMENT_ROOT"] . DIRECTORY_SEPARATOR . 'certs' . DIRECTORY_SEPARATOR. $certFileName;
-    $pass = base64_decode(self::$password);
-
-    $pkcs12 = file_get_contents($certFile);
-    if (!openssl_pkcs12_read($pkcs12, $certs, $pass)) {
-        throw new Exception("Error al leer el archivo certificado");
-    }
-    $cert = $certs['cert'];
-    //$key = $certs['pkey'];
-
-    $publicKey = openssl_x509_read($cert);
-    $privateKey = openssl_pkey_get_private($certs['pkey']);
-    $aInfoPublicKey = openssl_pkey_get_details(openssl_pkey_get_public($publicKey));
-    $certificateX509_pem = $cert;
-    $certificateX509 = $certificateX509_pem;
-    $certificateX509 = substr($certificateX509, strpos($certificateX509, "\n") + 1);
-    $certificateX509 = substr($certificateX509, 0, strpos($certificateX509, "\n-----END CERTIFICATE-----"));
-
-    $certificateX509 = preg_replace('/\r?\n|\r/', '', $certificateX509);
-    //$certificateX509 = preg_replace('/([^\0]{76})/', "$1\n", $certificateX509);
-    
-    $certificateX509_asn1 = openssl_x509_read($certificateX509_pem);
-    
-    $certificateX509_der = '';
-    openssl_x509_export($certificateX509_asn1, $certificateX509_der, false);
-    $certificateX509_der_hash = self::sha256_base64($certificateX509_der);
-
-    /*$certificateX509_der = '';
-    $certificateX509_der = openssl_x509_export($certificateX509_asn1, $certificateX509_der, OPENSSL_KEYTYPE_RSA);
-                         //openssl_x509_export($certificateX509_asn1, $certificateX509_der, false);
-    $certificateX509_der_hash = self::sha256_base64($certificateX509_der);*/
-    
-    $certData = openssl_x509_parse($certificateX509_asn1);
-    //$serialInit = gmp_init($certData["serialNumberHex"], 16);
-    $X509SerialNumber = strval(gmp_init($certData["serialNumberHex"], 16));
-    $issuerRevArray = array_reverse((array)$certData['issuer']);
-    $issuerName = implode(', ', array_map(function($issuerClave, $issuerValor) {
-      return "{$issuerClave}={$issuerValor}";
-    }, array_keys($issuerRevArray), $issuerRevArray));    
-    $sha_Comprobante = self::sha256_base64(str_replace('<?xml version="1.0" encoding="UTF-8"?>', '', $comprobante));
-
-    //$xmlns = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';    
-    $Certificate_number = self::obtenerAleatorio();
-    $Signature_number = self::obtenerAleatorio();
-    $SignedProperties_number = self::obtenerAleatorio();
-    //$SignedInfo_number = self::obtenerAleatorio();
-    $Reference_ID_number = self::obtenerAleatorio();
-    $SignatureValue_number = self::obtenerAleatorio();
-    $Object_number = self::obtenerAleatorio();
-
-    #region SIGNED PROPERTIES
-    $SignedProperties = "<xades:SignedProperties Id='Signature{$Signature_number}-SignedProperties{$SignedProperties_number}'>";
-
-    $SignedProperties .= '<xades:SignedSignatureProperties>';
-    $SignedProperties .= '<xades:SigningTime>';
-    $SignedProperties .= date('c');
-    $SignedProperties .= '</xades:SigningTime>';
-    $SignedProperties .= '<xades:SigningCertificate>';
-    $SignedProperties .= '<xades:Cert>';
-    $SignedProperties .= '<xades:CertDigest>';
-    $SignedProperties .= '<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmlenc#sha256"></ds:DigestMethod>';
-    $SignedProperties .= '<ds:DigestValue>';
-    $SignedProperties .= htmlspecialchars($certificateX509_der_hash, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-    $SignedProperties .= '</ds:DigestValue>';
-    $SignedProperties .= '</xades:CertDigest>';
-    $SignedProperties .= '<xades:IssuerSerial>';
-    $SignedProperties .= '<ds:X509IssuerName>';
-    $SignedProperties .= $issuerName;
-    $SignedProperties .= '</ds:X509IssuerName>';
-    $SignedProperties .= '<ds:X509SerialNumber>';
-    $SignedProperties .= $X509SerialNumber;
-    $SignedProperties .= '</ds:X509SerialNumber>';
-    $SignedProperties .= '</xades:IssuerSerial>';
-    $SignedProperties .= '</xades:Cert>';
-    $SignedProperties .= '</xades:SigningCertificate>';
-    $SignedProperties .= '</xades:SignedSignatureProperties>';
-
-    $SignedProperties .= '<xades:SignedDataObjectProperties>';
-    $SignedProperties .= "<xades:DataObjectFormat ObjectReference='#Reference-ID-$Reference_ID_number'>";
-    $SignedProperties .= '<xades:MimeType>';
-    $SignedProperties .= 'text/xml';
-    $SignedProperties .= '</xades:MimeType>';
-    $SignedProperties .= '<xades:Encoding>';
-    $SignedProperties .= 'UTF-8';
-    $SignedProperties .= '</xades:Encoding>';
-    $SignedProperties .= '</xades:DataObjectFormat>';
-    $SignedProperties .= '</xades:SignedDataObjectProperties>';
-
-    $SignedProperties .= '</xades:SignedProperties>';
-    $SignedProperties = preg_replace('/(?<=\>)(\r?\n)/', '', $SignedProperties);
-    $SignedProperties = preg_replace('/(?<=\>)(\s*)/', '', $SignedProperties);
-
-    $dom = new DOMDocument();
-    $dom->loadXML($SignedProperties);
-    $canonicalSignedProperties = $dom->C14N(true, false);    
-    $sha_SignedProperties = self::sha256_base64($canonicalSignedProperties);
-    #endregion
-
-    #region KEYINFO
-    $modulusBase64 = base64_encode($aInfoPublicKey['rsa']['n']);
-    $exponentBase64 = trim(base64_encode($aInfoPublicKey['rsa']['e'])); 
-    $KeyInfo = '<ds:KeyInfo Id="Certificate-KeyInfo' . $Certificate_number . '">';
-    $KeyInfo .= '<ds:X509Data>';
-    $KeyInfo .= '<ds:X509Certificate>';
-    $KeyInfo .= htmlspecialchars($certificateX509, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-    $KeyInfo .= '</ds:X509Certificate>';
-    $KeyInfo .= '</ds:X509Data>';
-    $KeyInfo .= '<ds:KeyValue>';
-    $KeyInfo .= '<ds:RSAKeyValue>';
-    $KeyInfo .= '<ds:Modulus>';
-    $KeyInfo .= htmlspecialchars($modulusBase64, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-    $KeyInfo .= '</ds:Modulus>';
-    $KeyInfo .= '<ds:Exponent>';
-    $KeyInfo .= htmlspecialchars($exponentBase64, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-    $KeyInfo .= '</ds:Exponent>';
-    $KeyInfo .= '</ds:RSAKeyValue>';
-    $KeyInfo .= '</ds:KeyValue>';
-    $KeyInfo .= '</ds:KeyInfo>';
-    $KeyInfo = preg_replace('/(?<=\>)(\r?\n)/', '', $KeyInfo);
-    $KeyInfo = preg_replace('/(?<=\>)(\s*)/', '', $KeyInfo);
-
-    $dom = new DOMDocument();
-    $dom->loadXML($KeyInfo);
-    $canonicalKeyInfo = $dom->C14N(true, false);
-    $sha_KeyInfo = self::sha256_base64($canonicalKeyInfo);
-    /*$sha_KeyInfo = self::sha256_base64(
-      str_replace('<ds:KeyInfo', '<ds:KeyInfo ' . $xmlns, $KeyInfo)
-    );*/
-    #endregion
-
-    #region SIGNEDINFO
-    $SignedInfo = '<ds:SignedInfo>';
-    $SignedInfo .= '<ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></ds:CanonicalizationMethod>';
-    $SignedInfo .= '<ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></ds:SignatureMethod>';
-    $SignedInfo .= '<ds:Reference Id="ReferenceKeyInfo" URI="#Certificate-KeyInfo'. $Certificate_number. '">';
-    $SignedInfo .= '<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmlenc#sha256"></ds:DigestMethod>';
-    $SignedInfo .= '<ds:DigestValue>';
-    $SignedInfo .= $sha_KeyInfo;
-    $SignedInfo .= '</ds:DigestValue>';
-    $SignedInfo .= '</ds:Reference>';
-    $SignedInfo .= '<ds:Reference Type="http://uri.etsi.org/01903#SignedProperties" URI="#Signature' . $Signature_number. '-SignedProperties'. $SignedProperties_number .'">'; // Id="SignedPropertiesID'. $SignedPropertiesID_number. '"
-    $SignedInfo .= '<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmlenc#sha256"></ds:DigestMethod>';
-    $SignedInfo .= '<ds:DigestValue>';
-    $SignedInfo .= $sha_SignedProperties;
-    $SignedInfo .= '</ds:DigestValue>';
-    $SignedInfo .= '</ds:Reference>';
-    $SignedInfo .= '<ds:Reference Id="Reference-ID-'. $Reference_ID_number . '" URI="#comprobante">';
-    $SignedInfo .= '<ds:Transforms>';
-    $SignedInfo .= '<ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></ds:Transform>';
-    $SignedInfo .= '</ds:Transforms>';
-    $SignedInfo .= '<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmlenc#sha256"></ds:DigestMethod>';
-    $SignedInfo .= '<ds:DigestValue>';
-    $SignedInfo .= $sha_Comprobante;
-    $SignedInfo .= '</ds:DigestValue>';
-    $SignedInfo .= '</ds:Reference>';
-    $SignedInfo .= '</ds:SignedInfo>';
-    $SignedInfo = preg_replace('/(?<=\>)(\r?\n)/', '', $SignedInfo);
-    $SignedInfo = preg_replace('/(?<=\>)(\s*)/', '', $SignedInfo);
-    
-    $dom = new DOMDocument();
-    $dom->loadXML($SignedInfo);
-    $canonicalSignedInfo = $dom->C14N(true, false);
-    //$sha_SignedInfo = SHA256::make($canonicalSignedInfo, true); //hash('sha256', $canonicalSignedInfo, true);
-    $signature = '';
-    openssl_sign($canonicalSignedInfo, $signature, $privateKey, OPENSSL_ALGO_SHA1);
-    $signatureB64 = base64_encode($signature);
-
-    /*$dom = new DOMDocument();
-    $dom->loadXML($SignedInfo);
-    $canonicalSignedInfo = $dom->C14N(true, false);
-    $sha_SignedInfo = hash('sha256', $canonicalSignedInfo, true);
-    //$sha_SignedInfo = str_replace('<ds:SignedInfo', "<ds:SignedInfo {$xmlns}", $SignedInfo);
-    #endregion
-
-    //$signature = '';
-    $digest = openssl_digest($sha_SignedInfo, 'SHA1');
-
-    // Firmar el hash utilizando la clave privada
-    $signature = '';
-    openssl_sign($digest, $signature, $privateKey, OPENSSL_ALGO_SHA1);
-    //openssl_sign($sha_SignedInfo, $signature, $key, OPENSSL_ALGO_SHA1);
-    $signatureB64 = base64_encode($signature);
-    // $signatureB64 = chunk_split(base64_encode($signature), 76, PHP_EOL);*/
-
-    $xades_bes = PHP_EOL . '<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" Id="Signature' . $Signature_number . '">';
-    $xades_bes .= $SignedInfo;
-    $xades_bes .= '<ds:SignatureValue Id="SignatureValue' . $SignatureValue_number . '">';
-    $xades_bes .= $signatureB64;
-    $xades_bes .= '</ds:SignatureValue>';
-    $xades_bes .= $KeyInfo;
-    $xades_bes .= '<ds:Object Id="Signature' . $Signature_number . '-Object' . $Object_number . '">';
-    $xades_bes .= '<xades:QualifyingProperties xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Target="#Signature' . $Signature_number . '">';
-    $xades_bes .= $SignedProperties;
-    $xades_bes .= '</xades:QualifyingProperties>';
-    $xades_bes .= '</ds:Object>';
-    $xades_bes .= '</ds:Signature>';
-
-    $xades_bes = preg_replace('/(<[^<]+)$/', $xades_bes . '$1', $comprobante);
-
-    /*$dom = new DOMDocument('1.0', 'UTF-8');
-    $dom->loadXML($xades_bes);
-    $dom->save('archivoFirmado.xml');*/
-
-    return $xades_bes;
-  }
-  private static function sha256_base64($txt) {
-    //$digest = hash('sha256', $txt, true);
-    $digest = SHA256::make($txt, true);
-    return base64_encode($digest);
-  }
-
-  private static function sha1_base64($txt) {
-    //$sha1 = sha1($txt, true); // true outputs raw binary data
-    // Encode the raw binary SHA-1 hash in Base64
-    //return base64_encode($sha1);
-    return base64_encode(pack('H*', sha1($txt)));
-  }
-
-  private static function obtenerAleatorio() {
-    return rand(990, 999000);
-  }
-
-  /*function bigint2base64($bigint) {
-    $hex = gmp_strval($bigint, 16);
-    if (strlen($hex) % 2 != 0) {
-        $hex = '0' . $hex;
-    }
-    $binary = hex2bin($hex);
-    $base64 = base64_encode($binary);
-    $formatted_base64 = chunk_split($base64, 76, "\n");
-    return rtrim($formatted_base64, "\n");
-  }
-
-  function hexToBase64($str) {
-    $hex = (strlen($str) % 2 != 0) ? "0{$str}" : $str;
-    $binary = hex2bin($hex);
-    $base64 = base64_encode($binary);
-    return $base64;
-  }*/
-
 
   public static function enviar($xmlComprobante, $ambiente) {
     $variable = $ambiente == '1' ? 'SUBDOMINIO_SRIPRB' : 'SUBDOMINIO_SRIPRO';

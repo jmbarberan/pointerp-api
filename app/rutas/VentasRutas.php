@@ -23,6 +23,10 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaTraerSecuencial',
     ]);
+    $this->addGet('/comprobantes/sucursal/{sucursal}/secuencial', [
+      'controller' => $controlador,
+      'action'     => 'ventaGenerarSecuencialCE',
+    ]);
     $this->addGet('/comprobantes/sucursal/{sucursal}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipo/{tipo}/filtro/{filtro}/buscar', [
       'controller' => $controlador,
       'action'     => 'ventasBuscar',

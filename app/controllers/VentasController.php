@@ -289,7 +289,16 @@ class VentasController extends ControllerBase  {
                   'conditions' => "Tipo = 19 AND EmpresaId = {$ret->ven->relCliente->EmpresaId}"
                 ]);
                 \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
-                \ComprobantesElectronicos::autorizarFactura($ret->ven);
+                $result = \ComprobantesElectronicos::autorizarFactura($ret->ven);
+                if (isset($result)) {
+                  if ($result->respuesta == true) {
+
+                  } else {
+                    
+                  }
+                } else {
+                  // respuesta nula
+                }
               } catch (Exception $e) {
                 $this->response->setStatusCode(500, 'Error');  
                 $msj = $e->getMessage();
@@ -650,6 +659,15 @@ class VentasController extends ControllerBase  {
     $this->response->setContent(json_encode($num));
     $this->response->send();
   }
+
+  public function ventaGenerarSecuencialCEAction() {
+    $sucursal = $this->dispatcher->getParam('sucursal');
+    $num = $this->generarSecuencialCE($sucursal);
+    $this->response->setStatusCode(200, 'Ok');
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($num));
+    $this->response->send();
+  }
   #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {
@@ -956,9 +974,7 @@ class VentasController extends ControllerBase  {
     $sucursal = Sucursales::findFirstById($sucursalId);
     $empresa = Empresas::findFirstById($sucursal->EmpresaId);
     $serie = $sucursal->Codigo . trim($sucursal->Descripcion);
-    $paramFaEmpresa = EmpresaParametros::findFirst([
-      'conditions' => "Tipo = 1 AND Referencia = 11 AND EmpresaId = {$empresa->Id}" 
-    ]);
+    $numSig = $this->generarSecuencialCE($sucursalId);
 
     $tipoDatos = (object) [
       'tipoDocumento' => '01', // 01: FACTURA
@@ -977,24 +993,6 @@ class VentasController extends ControllerBase  {
     #endregion
 
     #region Clave de acceso
-    
-    $numSig = intval($paramFaEmpresa->Indice);
-    // buscar el numero q siguiente q no existe
-    $existe = true; 
-    while($existe) {
-      $numSig++;
-      $rows = Ventas::find([
-        'conditions' => 'Tipo in (11, 12) AND CERespuestaTipo = :num: AND SucursalId = :suc: AND CEClaveAcceso is not null',
-        'bind' => [ 
-            'num' => $numSig, 
-            'suc' => $sucursalId 
-          ]
-      ]);
-      if ($rows->count() >= 0) {
-        $existe = false;
-      }
-    }
-    
     $fecha = new \DateTime();
     $codigoAleatorio = self::codigoAleatorio();
     if (strlen($codigoAleatorio) > 8) {
@@ -1015,8 +1013,7 @@ class VentasController extends ControllerBase  {
     $clave .= strval(self::calcularDigitoVerificadorCadena($clave));
     #endregion
 
-    $paramFaEmpresa->Indice = $numSig;
-    $paramFaEmpresa->update();
+    
 
     $retorno = (object) [
       'clave' => $clave,
@@ -1024,5 +1021,36 @@ class VentasController extends ControllerBase  {
     ];
 
     return $retorno;
+  }
+
+  private function generarSecuencialCE($sucursalId) {
+    $sucursal = Sucursales::findFirstById($sucursalId);
+    $empresa = Empresas::findFirstById($sucursal->EmpresaId);
+    $paramFaEmpresa = EmpresaParametros::findFirst([
+      'conditions' => "Tipo = 1 AND Referencia = 11 AND EmpresaId = {$empresa->Id}" 
+    ]);
+
+    $numSig = intval($paramFaEmpresa->Indice);
+    $numSig++;
+    $existe = true;
+    while($existe) {
+      $rows = Ventas::find([
+        'conditions' => 'Tipo = 11 AND CERespuestaTipo = :num: AND SucursalId = :suc:',
+        'bind' => [
+            'num' => $numSig,
+            'suc' => $sucursalId
+          ]
+      ]);
+      if ($rows->count() > 0) {
+        $numSig++;
+      } else {
+        $existe = false;
+      }
+    }
+
+    $paramFaEmpresa->Indice = $numSig;
+    $paramFaEmpresa->update();
+
+    return $numSig;
   }
 }

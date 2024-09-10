@@ -15,8 +15,7 @@
       "ext-curl": "*",
       "ext-gettext": "*",
       "phalcon/cphalcon": "^3.4",
-      "ext-phalcon": "*",
-      "robrichards/xmlseclibs": "^3.1"
+      "ext-phalcon": "*"
     },
     "require-dev": {
         "phalcon/ide-stubs": "^4.1"

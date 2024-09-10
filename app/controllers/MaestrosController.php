@@ -15,16 +15,16 @@ class MaestrosController extends ControllerBase  {
   
   #region Clientes
   public function clientesPorCedulaAction() {
-    $ced = $this->dispatcher->getParam('ced');    
+    $ced = $this->dispatcher->getParam('ced'); 
     $rows = Clientes::find([
-      'conditions' => 'Identificacion = :ced:',
+      'conditions' => 'Identificacion = :ced: AND Estado != 2',
       'bind' => [ 'ced' => $ced ]
     ]);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $rows = Clientes::find([
-        'conditions' => 'Codigo = :cod:',
+        'conditions' => 'Codigo = :cod: AND Estado != 2',
         'bind' => [ 'cod' => $ced ]
       ]);
       if ($rows->count() > 0) {

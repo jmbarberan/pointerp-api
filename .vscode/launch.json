@@ -23,7 +23,8 @@
         "DBS_PORT":"5432",
         "DBS_SCHEME":"subscripciones",
         "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
-        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986"
+        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986",
+        "CORS_ORIGEN":"*"
       }
     },
     {
@@ -44,7 +45,7 @@
       "serverReadyAction": {
         "pattern": "Development Server \\(http://localhost:([0-9]+)\\) started",
         "uriFormat": "http://localhost:%s",
-        "action": "openExternally"
+        //"action": "openExternally"
       },
       "env": {
         "DBS_HOST":"localhost",
@@ -54,7 +55,12 @@
         "DBS_PORT":"5432",
         "DBS_SCHEME":"subscripciones",
         "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
-        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986"
+        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986",
+        "URL_SRIFAC_ENV":"sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl",
+        "URL_SRIFAC_VAL":"sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl",
+        "SUBDOMINIO_SRIPRB":"https://celcer.",
+        "SUBDOMINIO_SRIPRO":"https://cel.",
+        "CORS_ORIGEN":"*"
       }
     }
   ]

@@ -40,7 +40,7 @@ return new \Phalcon\Config([
         'baseUri'           => '/',
     ],
     'entorno' => [
-        'origen'        => '*',
+        'origen'        => getenv('CORS_ORIGEN'),
         'tokenDuracion' => 12,
         'tokenSize'     => 16,
         'sharedemps'    => 0,
@@ -48,7 +48,7 @@ return new \Phalcon\Config([
         'subscripcion'  => 0,
     ],
     'cors' => [
-        'origen' => '*', // https://ecumedica.netlify.app
+        'origen' => getenv('CORS_ORIGEN'), // https://ecumedica.netlify.app
         'exposedHeaders' => [],
         // Should be in lowercases.
         'allowedHeaders' => ['x-requested-with', 'content-type', 'authorization'],

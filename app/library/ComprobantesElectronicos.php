@@ -23,7 +23,7 @@ class ComprobantesElectronicos {
 
   public static function cargarCertificado($certPath, $certPass) {
     self::$certificado = $certPath;
-    self::$password = $certPass;
+    self::$password = base64_decode($certPass);
   }
 
   public static function autorizarFactura($comprobante) {
@@ -31,7 +31,8 @@ class ComprobantesElectronicos {
       'respuesta' => false,
       'titulo' => '',
       'mensaje' => 'Los datos no se pudieron procesar',
-      'comprobante' => null
+      'comprobante' => null,
+      'proceso' => ''
     ];
     $ambiente = '1';
     $contribuyente = Empresas::findFirstById($comprobante->relCliente->EmpresaId);
@@ -41,7 +42,7 @@ class ComprobantesElectronicos {
       if (isset($reg))
         $ambiente = $reg->Codigo;
     }
-    $xmlFactura = self::crearXmlFactura($comprobante);    
+    $xmlFactura = self::crearXmlFactura($comprobante);
     if (isset($xmlFactura)) {
       $type = 'http://uri.etsi.org/01903/v1.3.2#';
       $crypto = new OpenSSL(BASE_PATH . '/certs/' . self::$certificado, self::$password, "PKCS12");
@@ -52,14 +53,23 @@ class ComprobantesElectronicos {
       $xmlFirmado = $xmlsec->sign($xmlFactura, $type, $crypto, $options);
       if (isset($xmlFirmado)) {
         $respEnvio = self::enviar($xmlFirmado, $ambiente);
-        if (isset($respEnvio)) {
-          // recibido o devuelta
-          $res = self::verificar($comprobante->CEClaveAcceso, $ambiente);
+        if ($respEnvio->completo) {
+          $ret->proceso = 'enviar';
+          sleep(2);
+          $resVerificar = self::verificar($comprobante->CEClaveAcceso, $ambiente);
+          if ($resVerificar->completo) {
+            $ret->proceso = 'verificar';
+            $ret->respuesta = true;
+            $ret->comprobante = $resVerificar->respuesta;
+          } else {
+            $ret->mensaje = implode(', ', $resVerificar->respuesta);
+          }
+        } else {
+          $ret->mensaje = implode(', ', $respEnvio->respuesta);
         }
-        // guardar el resultado de la autorizacion sea aprobado o rechazado
       }
     }
-    return $res;
+    return $ret;
   }
 
   private static function crearXmlFactura($comprobante) {
@@ -160,7 +170,7 @@ class ComprobantesElectronicos {
       $cbc = $infoFactura->appendChild($cbc);
       $cbc = $xml->createElement('dirEstablecimiento', $comprobante->relSucursal->Direccion);
       $cbc = $infoFactura->appendChild($cbc);
-      if ($contribuyente->CEResolucio != null)
+      if ($contribuyente->CEResolucion != null)
         $cbc = $xml->createElement('contribuyenteEspecial', $contribuyente->CEResolucion);
       $cbc = $infoFactura->appendChild($cbc);
       $cbc = $xml->createElement('obligadoContabilidad', $obligadoContabilidad);
@@ -227,7 +237,7 @@ class ComprobantesElectronicos {
       $cbc = $xml->createElement('total', number_format(doubleval($comprobante->Subtotal) + doubleval($comprobante->SubtotalEx) + doubleval($comprobante->Impuestos), 2, ".", ""));
       $cbc = $pago->appendChild($cbc);
       $cbc = $xml->createElement('unidadTiempo', "DIAS");
-      $cbc = $pago->appendChild($cbc);      
+      $cbc = $pago->appendChild($cbc);
 
     
       //DETALLES DE LA FACTURA.
@@ -293,47 +303,58 @@ class ComprobantesElectronicos {
   }
 
   public static function enviar($xmlComprobante, $ambiente) {
+    $ret = (Object) [
+        "completo" => false,
+        "mensaje" => "Operacion incompleta",
+        "respuesta" => null
+      ];
     $variable = $ambiente == '1' ? 'SUBDOMINIO_SRIPRB' : 'SUBDOMINIO_SRIPRO';
     $wsdlURL = getenv($variable) . getenv('URL_SRIFAC_ENV');
     try {
       $client = new SoapClient($wsdlURL);
       $params = [ 'xml' => $xmlComprobante ];
       $response = $client->__soapCall('validarComprobante', [ $params ]);
-      //$responseXml = $response->RespuestaRecepcionComprobante;
-      // file_put_contents("repuesta.xml", $responseXml);
-      return [
-        "completo" => true,
-        "mensaje" => "Operacion completa",
-        "respuesta" => $response->RespuestaRecepcionComprobante
-      ];
+      $responseXml = $response->RespuestaRecepcionComprobante;
+      $ret->mensaje = $responseXml->estado;
+      if ($responseXml->estado == 'RECIBIDA') {
+        $ret->completo = true;
+        $ret->respuesta = null;
+      } else {
+        $ret->completo = false;
+        $ret->respuesta = $responseXml->mensajes;
+      }
+      return $ret;
     } catch (SoapFault $fault) {
-      return (Object) [
-        "completo" => false,
-        "mensaje" => $fault->faultstring,
-        "respuesta" => $fault 
-      ];
+      $ret->mensaje = $fault->faultstring;
     }
   }
 
   public static function verificar($claveAcceso, $ambiente) {
+    $ret = (Object) [
+      "completo" => true,
+      "mensaje" => "Operacion completa",
+      "claveAcceso" => $claveAcceso,
+      "respuesta" => null
+    ];
     $variable = $ambiente == '1' ? 'SUBDOMINIO_SRIPRB' : 'SUBDOMINIO_SRIPRO';
     $wsdlURL = getenv($variable) . getenv('URL_SRIFAC_VAL');
     try {
       $client = new SoapClient($wsdlURL);
       $params = [ 'claveAccesoComprobante' => $claveAcceso ];
-      sleep(3);
       $response = $client->__soapCall("autorizacionComprobante", [ $params ]);
-      return [
-        "completo" => true,
-        "mensaje" => "Operacion completa",
-        "respuesta" => $response
-      ];
+      $responseXml = $response->RespuestaAutorizacionComprobante->autorizaciones->autorizacion;
+      $ret->mensaje = $responseXml->estado;
+      if ($responseXml->estado == 'AUTORIZADO') {
+        $ret->completo = true;
+        $ret->respuesta = $response->RespuestaAutorizacionComprobante->autorizaciones;
+      } else {
+        $ret->completo = false;
+        $ret->respuesta = $responseXml->mensajes;
+      }
+      return $ret;
     } catch (SoapFault $e) {
-      return (Object) [
-        "completo" => false,
-        "mensaje" => $e->getMessage(),
-        "respuesta" => $e
-      ];
+      $ret->mensaje = $e->getMessage();
+      return $ret;
     }
   }
 }

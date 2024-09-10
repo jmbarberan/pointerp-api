@@ -81,8 +81,6 @@ class VentasController extends ControllerBase  {
     $desde = $this->dispatcher->getParam('desde');
     $hasta = $this->dispatcher->getParam('hasta');
     $res = [];
-    /*$desde .= " 0:00:00";
-    $hasta .= " 23:59:59";*/
     $condicion = "Tipo in (11, 12) AND SucursalId = " . $suc . " AND Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
     if ($estado == 0) {
       $condicion .= " AND Estado = " . $estado;
@@ -168,7 +166,7 @@ class VentasController extends ControllerBase  {
         $ven->Especie = $datos->Especie; // receta, servicio medico
         $ven->CEClaveAcceso = $datos->CEClaveAcceso;
         $ven->CEAutorizacion = $datos->CEAutorizacion;
-        $ven->CEAutorizacionFecha = $datos->CEAutorizacionFecha;
+        $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
         $ven->CEContenido = $datos->CEContenido;
         $ven->CEEtapa = $datos->CEEtapa;
         $ven->CERespuestaId = $datos->CERespuestaId;
@@ -291,11 +289,22 @@ class VentasController extends ControllerBase  {
                 \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
                 $result = \ComprobantesElectronicos::autorizarFactura($ret->ven);
                 if (isset($result)) {
+                  $ventaGuardada = Ventas::findFirstById($ret->ven->Id);
                   if ($result->respuesta == true) {
-
+                    if (isset($ventaGuardada) && isset($result->comprobante)) {
+                      $ahora = new \DateTime();
+                      $ventaGuardada->CEAutorizacion = $ret->ven->CEClaveAcceso;
+                      $ventaGuardada->CERespuestaMsj = $result->mensaje;
+                      $ventaGuardada->CEAutorizaFecha = $ahora->format('Y-m-d H:i:s');
+                      $ventaGuardada->CEContenido = $result->comprobante;
+                    }
                   } else {
-                    
+                    if (isset($ventaGuardada)) {
+                      $ventaGuardada->CERespuestaMsj = "{$result->proceso}: {$result->mensaje}";
+                      $ventaGuardada->CEContenido = $result->comprobante;
+                    }
                   }
+                  $ventaGuardada->update();
                 } else {
                   // respuesta nula
                 }
@@ -514,8 +523,19 @@ class VentasController extends ControllerBase  {
           'conditions' => "Tipo = 19 AND EmpresaId = {$ven->relCliente->EmpresaId}"
         ]);
         \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
-        // validar si tiene secuencial y clave de accceso y no tiene error: SECUENCIAL REGISTRADO
-        \ComprobantesElectronicos::autorizarFactura($ven);
+        $result = \ComprobantesElectronicos::autorizarFactura($ven);
+        if (isset($result)) {          
+          if ($result->respuesta == true) {
+            if (isset($ventaGuardada) && isset($result->comprobante)) {
+              $ven->CEContenido = $result->comprobante;
+            }
+          } else {
+            if (isset($ventaGuardada)) {
+              $ven->CERespuestaMsj = $result->mensaje;
+            }
+          }
+          $ven->update();
+        }
       } catch (Exception $e) {
         $this->response->setStatusCode(500, 'Error');  
         $msj = $e->getMessage();

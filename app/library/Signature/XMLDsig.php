@@ -86,7 +86,7 @@ class XMLDsig implements SignatureInterface
             'Type' => 'http://www.w3.org/2000/09/xmldsig#Object',
             'URI' => '#'.$this->contentId
         ];
-        $transforms = ['Algorithm' => $canonicalMethod];
+        $transforms = ['Algorithm' => 'http://www.w3.org/2000/09/xmldsig#enveloped-signature'];
         $this->addReference($node->item(0),$crypto, $canonicalMethod ,$digestMethod, $attrReference, $transforms);
     }
 
@@ -164,7 +164,7 @@ class XMLDsig implements SignatureInterface
     {
         $this->doc = new \DOMDocument();
         $this->doc->loadXML($xml);
-
+        $this->contentId = 'comprobante';
         /*$this->doc = new \DOMDocument();
         $this->doc->loadXML('');
 

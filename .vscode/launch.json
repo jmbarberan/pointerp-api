@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch Built-in web server default",
+      "name": "BI Web server",
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
@@ -24,6 +24,10 @@
         "DBS_SCHEME":"subscripciones",
         "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
         "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986",
+        "URL_SRIFAC_ENV":"sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl",
+        "URL_SRIFAC_VAL":"sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl",
+        "SUBDOMINIO_SRIPRB":"https://celcer.",
+        "SUBDOMINIO_SRIPRO":"https://cel.",
         "CORS_ORIGEN":"*"
       }
     },
@@ -35,7 +39,7 @@
         "-dxdebug.mode=debug",
         "-dxdebug.start_with_request=yes",
         "-S",
-        "192.168.1.4:8090",
+        "192.168.1.3:8090",
         "-t",
         "public"
       ],

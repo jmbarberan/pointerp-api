@@ -1054,7 +1054,7 @@ class NominaController extends ControllerBase {
           $ings = doubleval($sumas['ings']);
           $egrs = doubleval($sumas['egrs']);
           $rol->pagado = $ings - $egrs;
-        } catch(\Exception $ex) {}
+        } catch(Exception $ex) {}
       }
 
       $rol->estado = 1;

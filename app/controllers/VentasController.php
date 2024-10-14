@@ -785,13 +785,12 @@ class VentasController extends ControllerBase  {
           $ret->msj = "Error al crear el cliente: {$resp}";
           $guardar = false;
         }
-<<<<<<< HEAD
-        $ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
+        /*$ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
       } else {
         $msj = "No se pudo crear el nuevo registro: \n";
         foreach ($ven->getMessages() as $m) {
           $msj .= $m . "\n";
-=======
+        }*/
       }
       if ($guardar) {
         $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
@@ -869,7 +868,6 @@ class VentasController extends ControllerBase  {
           }
           $ret->cid = 0;
           $ret->msj = $msj;
->>>>>>> comprobantes-electronicos
         }
       }
       $this->db->commit();

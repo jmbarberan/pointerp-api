@@ -10,26 +10,48 @@ use Pointerp\Modelos\ClientesSri;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Maestros\Proveedores;
+use Phalcon\Paginator\Adapter\Model as PaginatorModel;
 
 class MaestrosController extends ControllerBase  {
   
   #region Clientes
   public function clientesPorCedulaAction() {
-    $ced = $this->dispatcher->getParam('ced'); 
+    $this->view->disable();
+    $filtroEmp = '';
+    $paramsEmp = [];
+    try {
+      $emp = $this->request->getQuery('emp', null, 0);
+      $filtroEmp = 'EmpresaId = :emp: AND ';
+      $paramsEmp = [ 'emp' => $emp ];
+    } catch (Exception $ex) {
+      
+    }
+    $ced = $this->dispatcher->getParam('ced');
     $rows = Clientes::find([
-      'conditions' => 'Identificacion = :ced: AND Estado != 2',
-      'bind' => [ 'ced' => $ced ]
+      'conditions' => "{$filtroEmp} Identificacion = :ced: AND Estado != 2",
+      'bind' => [ 'ced' => $ced, ...$paramsEmp ]
     ]);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $rows = Clientes::find([
-        'conditions' => 'Codigo = :cod: AND Estado != 2',
-        'bind' => [ 'cod' => $ced ]
+        'conditions' => 'Codigo = :ced: AND Estado != 2',
+        'bind' => [ 'ced' => $ced ]
       ]);
       if ($rows->count() > 0) {
         $this->response->setStatusCode(200, 'Ok');
       } else {
+        $nombres = $this->buscarCedulaExterno($ced);
+        if ($nombres != '') {
+          $cli = new Clientes();
+          $cli->Id = 0;
+          $cli->Cedula = $ced;
+          $cli->Nombres = $nombres;
+          $cli->Estado = 0;
+        }
+        $rows = [
+          $cli
+        ];
         $this->response->setStatusCode(404, 'Not found');
       }
     }
@@ -48,57 +70,114 @@ class MaestrosController extends ControllerBase  {
     // eñes
     $filtroSP = str_replace('%C3%91' , 'Ñ',$filtroSP);
     $filtroSP = str_replace('%C3%B1' , 'ñ',$filtroSP);
-    //$config = Di::getDefault()->getConfig();
-    $condicion = '';  
+    try {
+      $page = $this->request->getQuery('page', null, 0);
+      $limit = $this->request->getQuery('limit', null, 0);
+      $order = $this->request->getQuery('order', null, 'Nombres');
+      $orderDir = $this->request->getQuery('dir', null, '');
+      $externo = $this->request->getQuery('ext', null, false);
+    } catch (Exception $ex) {
+      $page = 0;
+      $limit = 0;
+      $order = 'Nombres';
+      $orderDir = '';
+      $externo = false;
+    }
+
+    $condicion = '';
+    $params = [];
     $ex = $this->subscripcion['id'];
     if ($this->subscripcion['exclusive'] === 1) {
-      $condicion .= ($this->subscripcion['sharedemps'] === 1 ? '' : 'EmpresaId = ' . $emp . ' AND ');
+      if ($this->subscripcion['sharedemps'] != 1) {
+        $condicion = 'EmpresaId = :emp:';
+        $params = [ 'emp' => $emp ];
+      }
     } else {
       $emps = SubscripcionesEmpresas::find([
         'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
       ]);
-      $condicion = '';
       foreach ($emps as $e) {
-        $condicion .= strlen($condicion) > 0 ? ', ' . $e->empresa_id : $e->empresa_id;
+        $condicion .= strlen($condicion) > 0 ? ", {$e->empresa_id}" : strval($e->empresa_id);
       }
-      $condicion = (strlen($condicion) > 0 ? 'EmpresaId in (' . $condicion . ')' : 'EmpresaId = ' . $emp);
-      $condicion .= ' AND ';
+      $condicion = strlen($condicion) > 0 ? "EmpresaId in ({$condicion})" : '';
     }
     
+    $condicion .= strlen($condicion) > 0 ? " AND " : "";
     if ($atrib != 'Nombres') {
-      $condicion .= $atrib . ' = :fil:';
+      $condicion .= "{$atrib} = :fil:";
     } else {
       $filtroSP = strtoupper($filtroSP);
       $filtro = '%' . str_replace(' ' , '%', $filtroSP) . '%';
-      $condicion .= 'UPPER('.$atrib.') LIKE :fil:';
+      $condicion .= "UPPER({$atrib}) LIKE :fil:";
     }
+    $params = array_merge([ 'fil' => $filtro ], $params);
     if ($estado == 0) { // Estado = 1: motrar todos
-        $condicion .= ' AND Estado = 0';
+        $condicion .= ' AND Estado = :est:';
+        $params = array_merge([ 'est' => 0 ], $params);
     }
-    $rows = Clientes::find([
+
+    /*$rows = Clientes::find([
       'conditions' => $condicion,
-      'bind' => [ 'fil' => $filtro ]
+      'bind' => $params
     ]);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       if ($atrib == 'Cedula') {
-        $nombres = buscarCedulaExterno($filtro);
+        $nombres = $this->buscarCedulaExterno($filtro);
         if ($nombres != '') {
-          $cli = new Clientes()
+          $cli = new Clientes();
           $cli->Id = 0;
           $cli->Cedula = $filtro;
           $cli->Nombres = $nombres;
           $cli->Estado = 0;
         }
         $rows = [
-          $cli;
-        ]
+          $cli
+        ];
       }
       $this->response->setStatusCode(404, 'Not found');
+    }*/
+
+    $hasData = false;
+    $clis = [];
+    if ($page > 0 && $limit > 0) {
+      
+      $paginator = new PaginatorModel([
+        "model"      => Clientes::class,
+        "parameters" => [
+          'conditions' => $condicion,
+          'bind' => $params,
+          'order' => ($order ?? 'Nombres') . " {$orderDir}"
+        ],
+        "limit"      => $limit,
+        "page"       => $page,
+      ]);
+      $pageData = $paginator->paginate();
+      $clis = (object) [
+        'completo' => true,
+        'total' => $pageData->getTotalItems(),
+        'items' => $pageData->getItems()
+      ];
+      $hasData = $pageData->getTotalItems() > 0;      
+    } else {
+      $clis = Clientes::find([
+        'conditions' => $condicion,
+        'bind' => $params,
+        'order' => $order ?? 'Nombres'
+      ]);
+      $hasData = $clis->count() > 0;
     }
+    
+
+    if ($hasData) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($rows));
+    $this->response->setContent(json_encode($clis));
     $this->response->send();
   }
 
@@ -229,7 +308,7 @@ class MaestrosController extends ControllerBase  {
 
   public function buscarCedulaSRIAction() {
     $ident = $this->dispatcher->getParam('identificacion');
-    $nombre = buscarCedulaExterno($ident)
+    $nombre = $this->buscarCedulaExterno($ident);
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($nombre));
     $this->response->send();
@@ -258,6 +337,34 @@ class MaestrosController extends ControllerBase  {
         $nombre = $nombreComercial;
     }
     return $nombre;
+  }
+
+  public function clienteCambiarEstadoAction() {
+    $result = (Object) [
+      "completo" => false,
+      "mensaje" => "La operación no se pudo completar"
+    ];
+    $id     = $this->request->getQuery('id', null, 0);
+    $activo = $this->request->getQuery('activo', null, true);
+    $this->response->setStatusCode(422, 'Unprocessable Content');
+    $cliente = Clientes::findFirstById($id);
+    if ($cliente) {
+      $cliente->Estado = $activo == "true" ? 0 : 2;
+      if($cliente->update()) {
+        $result->completo = true;
+        $result->mensaje = "Registro actualizado exitosamente";
+        $this->response->setStatusCode(201, 'Ok');
+      } else {
+        $result->mensaje = "Error al intentar modificar el cliente";
+      }
+    } else {
+      $result->mensaje = "No se encontro el cliente";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($result));
+    $this->response->send();
   }
   #endregion
 

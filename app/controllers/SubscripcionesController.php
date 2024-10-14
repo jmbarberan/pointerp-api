@@ -44,7 +44,7 @@ class SubscripcionesController extends ControllerBase  {
     ];
     $datos = $this->request->getJsonRawBody();
     $this->response->setStatusCode(404, 'Not Found');
-    if (strlen($datos->codigo) > 0) {
+    if (!!$datos->codigo && strlen($datos->codigo) > 0) {
       $sub = Subscripciones::findFirst([
         'conditions' => "clave = '" . trim(base64_decode($datos->codigo)) . "'"
       ]);
@@ -221,7 +221,7 @@ class SubscripcionesController extends ControllerBase  {
             $this->response->setStatusCode(200, 'Ok');
           } else {
             $msj = "Los datos se actualizaron parcialmente, error:" . "\n";
-            foreach ($cli->getMessages() as $m) {
+            foreach ($sub->getMessages() as $m) {
               $msj .= $m . "\n";
             }
             $ret->res = false;
@@ -229,7 +229,7 @@ class SubscripcionesController extends ControllerBase  {
           }        
         } else {
           $msj = "No se puede actualizar los datos, error: " . "\n";
-          foreach ($pac->getMessages() as $m) {
+          foreach ($tk->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->res = false;

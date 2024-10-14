@@ -35,6 +35,11 @@ class MaestrosRutas extends \Phalcon\Mvc\Router\Group
       'action'     => 'buscarCedulaSRI',
     ]);
 
+    $this->addPut('/clientes/modificar/estado', [
+      'controller' => $controlador,
+      'action'     => 'clienteCambiarEstado',
+    ]);
+
     $this->addGet('/proveedores/cedula/{ced}', [
       'controller' => $controlador,
       'action'     => 'proveedoresPorCedula',

@@ -20,6 +20,8 @@ use Pointerp\Modelos\Inventarios\MovimientosItems;
 use Pointerp\Modelos\Inventarios\Existencias;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\SubscripcionesEmpresas;
+use Pointerp\Modelos\EmpresaParametros;
+use Phalcon\Paginator\Adapter\Model as PaginatorModel;
 
 class InventariosController extends ControllerBase  {
 
@@ -43,6 +45,17 @@ class InventariosController extends ControllerBase  {
 
   public function productosBuscarAction() {
     $this->view->disable();
+    try {
+      $page = $this->request->getQuery('page', null, 0);
+      $limit = $this->request->getQuery('limit', null, 0);
+      $order = $this->request->getQuery('order', null, 'Nombre');
+      $orderDir = $this->request->getQuery('dir', null, '');
+    } catch (Exception $ex) {
+      $page = 0;
+      $limit = 0;
+      $order = 'Nombre';
+      $orderDir = '';
+    }
     $tipoBusca = $this->dispatcher->getParam('tipo');
     $estado = $this->dispatcher->getParam('estado');
     $filtro = $this->dispatcher->getParam('filtro');
@@ -75,28 +88,52 @@ class InventariosController extends ControllerBase  {
       }
     }
 
-    $campo = "Nombre like '" . $filtro . "'";
+    $campo = "Nombre like '{$filtro}'";
     if($atrib == 1) {
-      $campo = "Codigo = '" . $filtro . "'";
+      $campo = "Codigo = '{$filtro}'";
     };
 
     $condicion .= $campo;
     if ($estado == 0) {
         $condicion .= ' AND Estado = 0';
     }
-    
-    $res = Productos::find([
-      'conditions' => $condicion,
-      'order' => 'Nombre'
-    ]);
 
-    if ($res->count() > 0) {
+    $hasData = false;
+    $prods = [];
+    if ($page > 0 && $limit > 0) {
+      
+      $paginator = new PaginatorModel([
+        "model"      => Productos::class,
+        "parameters" => [
+          'conditions' => $condicion,
+          'order' => ($order ?? 'Nombre') . " {$orderDir}"
+        ],
+        "limit"      => $limit,
+        "page"       => $page,
+      ]);
+      $pageData = $paginator->paginate();
+      $prods = (object) [
+        'completo' => true,
+        'total' => $pageData->getTotalItems(),
+        'items' => $pageData->getItems()
+      ];
+      $hasData = $pageData->getTotalItems() > 0;      
+    } else {
+      $prods = Productos::find([
+        'conditions' => $condicion,
+        'order' => $order ?? 'Nombre'
+      ]);
+      $hasData = $prods->count() > 0;
+    }
+    
+
+    if ($hasData) {
       $this->response->setStatusCode(200, 'Ok');
     } else {
       $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($res));
+    $this->response->setContent(json_encode($prods));
     $this->response->send();
   }
 
@@ -291,7 +328,7 @@ class InventariosController extends ControllerBase  {
             }
           }
 
-          if ($soloiva) {
+          if ($soloIva) {
             $param = EmpresaParametros::findFirst([
               "conditions" => "Tipo = 1 and EmpresaId = {$prd->EmpresaId}"
             ]);
@@ -322,7 +359,7 @@ class InventariosController extends ControllerBase  {
 
             foreach($datos->relImposiciones as $impos) {
               if ($impos->Id > 0) {
-                $piv = ProductosImposiciones::findFirstById($prdimp->Id);
+                $piv = ProductosImposiciones::findFirstById($impos->Id);
                 if (isset($piv) && $piv != null) {
                   $piv->ImpuestoId = $impos->ImpuestoId;
                   $piv->update();
@@ -330,7 +367,7 @@ class InventariosController extends ControllerBase  {
               } else {
                 $piv = new ProductosImposiciones();
                 $piv->ProductoId = $datos->Id;
-                $piv->ImpuestoId = $prdimp->ImpuestoId;
+                $piv->ImpuestoId = $impos->ImpuestoId;
                 $piv->create();
               }
             }
@@ -404,7 +441,7 @@ class InventariosController extends ControllerBase  {
           $ret->cid = $prd->Id;          
           $ret->msj = "Se registrara las imposiciones";
           // Crear imposiciones
-          $impuestoId = $mi->ImpuestoId;
+          $impuestoId = 0;
           if ($soloIva) {
             $param = EmpresaParametros::find([
               "conditions" => "Tipo = 1 and EmpresaId = {$prd->EmpresaId}"

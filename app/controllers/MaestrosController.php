@@ -369,6 +369,94 @@ class MaestrosController extends ControllerBase  {
   #endregion
 
   #region Proveedores
+  public function proveedoresBuscarAction() {
+    $estado = $this->dispatcher->getParam('estado');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $atrib = $this->dispatcher->getParam('atrib');
+    $emp = $this->dispatcher->getParam('emp');
+    $filtroSP = str_replace('%20', ' ', $filtro);
+    $filtroSP = str_replace('  ', ' ',trim($filtroSP));
+    // eñes
+    $filtroSP = str_replace('%C3%91' , 'Ñ',$filtroSP);
+    $filtroSP = str_replace('%C3%B1' , 'ñ',$filtroSP);
+    try {
+      $page = $this->request->getQuery('page', null, 0);
+      $limit = $this->request->getQuery('limit', null, 0);
+      $order = $this->request->getQuery('order', null, 'Nombres');
+      $orderDir = $this->request->getQuery('dir', null, '');
+      $externo = $this->request->getQuery('ext', null, false);
+    } catch (Exception $ex) {
+      $page = 0;
+      $limit = 0;
+      $order = 'Nombres';
+      $orderDir = '';
+      $externo = false;
+    }
+
+    // Filtros
+    $condicion = '';
+    $params = [];
+    $ex = $this->subscripcion['id'];
+    if ($this->subscripcion['exclusive'] === 1) {
+      if ($this->subscripcion['sharedemps'] != 1) {
+        $condicion = 'EmpresaId = :emp:';
+        $params = [ 'emp' => $emp ];
+      }
+    } else {
+      $emps = SubscripcionesEmpresas::find([
+        'conditions' => 'subscripcion_id = ' . $this->subscripcion['id']
+      ]);
+      foreach ($emps as $e) {
+        $condicion .= strlen($condicion) > 0 ? ", {$e->empresa_id}" : strval($e->empresa_id);
+      }
+      $condicion = strlen($condicion) > 0 ? "EmpresaId in ({$condicion})" : '';
+    }
+    
+    $condicion .= strlen($condicion) > 0 ? " AND " : "";
+    if ($atrib != 'Nombre') {
+      $condicion .= "{$atrib} = :fil:";
+    } else {
+      $filtroSP = strtoupper($filtroSP);
+      $filtro = '%' . str_replace(' ' , '%', $filtroSP) . '%';
+      $condicion .= "UPPER({$atrib}) LIKE :fil:";
+    }
+    $params = array_merge([ 'fil' => $filtro ], $params);
+    if ($estado == 0) { // Estado = 1: motrar todos
+        $condicion .= ' AND Estado = :est:';
+        $params = array_merge([ 'est' => 0 ], $params);
+    }
+
+    $hasData = false;
+    $paginator = new PaginatorModel([
+      "model"      => Proveedores::class,
+      "parameters" => [
+        'conditions' => $condicion,
+        'bind' => $params,
+        'order' => ($order ?? 'Nombre') . " {$orderDir}"
+      ],
+      "limit"      => $limit,
+      "page"       => $page,
+    ]);
+    $pageData = $paginator->paginate();
+    $prvs = (object) [
+      'completo' => true,
+      'total' => $pageData->getTotalItems(),
+      'items' => $pageData->getItems()
+    ];
+    $hasData = $pageData->getTotalItems() > 0;    
+    
+
+    if ($hasData) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($prvs));
+    $this->response->send();
+  }
+
   public function proveedoresPorCedulaAction() {
     $ced = $this->dispatcher->getParam('ced');
     $rows = Proveedores::find([
@@ -408,6 +496,234 @@ class MaestrosController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function proveedorExisteAction() {
+    $id = $this->dispatcher->getParam('id');
+    $cedula = $this->dispatcher->getParam('cedula');
+    $nombre = $this->dispatcher->getParam('nombre');
+
+    $rows = Proveedores::find([
+      'conditions' => 'Identificacion = :ced: OR Nombre = :nom: OR Id != :id:',
+      'bind' => [ 'ced' => $cedula, 'nom' => $nombre, 'id' => $id ]
+    ]);
+    $this->response->setStatusCode(200, 'Ok');
+    let result = [ existe = $rows->count() > 0 ];
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode(result));
+    $this->response->send();
+  }
+
+  public function proveedorCambiarEstadoAction() {
+    $estado = $this->dispatcher->getParam('estado');
+    $id = $this->dispatcher->getParam('id');
+    $result = (Object) [
+      "completo" => false,
+      "mensaje" => "La operación no se pudo completar"
+    ];
+    $this->response->setStatusCode(422, 'Unprocessable Content');
+    $proveedor = Proveedores::findFirstById($id);
+    if ($proveedor) {
+      $proveedor->Estado = $activo == "true" ? 0 : 2;
+      if($proveedor->update()) {
+        $result->completo = true;
+        $result->mensaje = "Registro actualizado exitosamente";
+        $this->response->setStatusCode(201, 'Ok');
+      } else {
+        $result->mensaje = "Error al intentar modificar el cliente";
+      }
+    } else {
+      $result->mensaje = "No se encontro el cliente";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($result));
+    $this->response->send();
+  }
+
+  public function proveedorGuardarAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => $datos->Id,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    try {
+      $newPrv = new Proveedores();
+      if ($datos->Id > 0) {
+        $newPrv = Proveedores::findFirstById($datos->Id);
+      }
+      $newPrv->EmpresaId = $datos->EmpresaId;
+      $newPrv->Codigo = $datos->Codigo;
+      $newPrv->Identificacion = $datos->Identificacion;
+      $newPrv->IdentificacionTipo = $datos->IdentificacionTipo;
+      $newPrv->Nombres = $datos->Nombres;
+      $newPrv->Representante = $datos->Representante;
+      $newPrv->Direccion = $datos->Direccion;
+      $newPrv->Telefonos = $datos->Telefonos;
+      $newPrv->Ciudad = $datos->Ciudad;
+      $newPrv->CiudadId = $datos->CiudadId;
+      $newPrv->Estado = $datos->Estado;
+      if ($datos->Id > 0) {
+        if (!$newPrv->update()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo actualizar el proveedor: " . "\n";
+          foreach ($newPrv->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      } else {
+        $newcod = $datos->Codigo;
+        if (strlen($datos->Codigo) <= 0) {
+          $di = Di::getDefault();
+          $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Proveedores 
+              WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+          $qry = new Query($phql, $di);
+          $rws = $qry->execute();
+          if ($rws->count() === 1) {
+            $rmax = $rws->getFirst();
+            try {
+              $num = intval($rmax['maxcod']);
+            } catch (Exception $e) {
+              //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
+              $num = 0;
+            }
+          }
+          
+          if ($num == 0)
+            $num = 1000;
+          else
+            $num += 1;
+
+          $newcod = strval($num);
+        }
+        $newPrv->Codigo = $newcod;
+        if (!$newPrv->create()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo crear el nuevo proveedor: " . "\n";
+          foreach ($newPrv->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->response->setStatusCode(500, 'Error');  
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $ex->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+  #endregion
+
+  #region Impuestos
+  public function impuestosPorEstadoAction() {
+    $this->view->disable();
+    $estado = $this->dispatcher->getParam('estado');
+    $condiciones = ''
+    if ($estado == 0) {
+      $condiciones = 'Estado = 0'
+    }
+
+    $rows = Impuestos::find([
+      'conditions' => $condiciones,
+    ]);
+    if ($rows->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json');    
+    $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function impuestoGuardarAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => $datos->Id,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    try {
+      $newImp = new Impuestos();
+      if ($datos->Id > 0) {
+        $newImp = Impuestos::findFirstById($datos->Id);
+      }
+      $newImp->Nombre = $datos->Nombre;
+      $newImp->Porcentaje = $datos->Porcentaje;
+      $newImp->CodigoEmision = $datos->CodigoEmision;
+      $newImp->CodigoPorcentaje = $datos->CodigoPorcentaje;
+      $newImp->Actualizado = date('Y-m-d H:i:s');
+      if ($datos->Id > 0) {
+        if (!$newImp->update()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo actualizar el impuesto: " . "\n";
+          foreach ($newImp->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      } else {
+        if (!$neImp->create()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo crear el nuevo impuesto: " . "\n";
+          foreach ($newImp->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->response->setStatusCode(500, 'Error');  
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $ex->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function impuestoModificarEstadoAction() {
+    $estado = $this->dispatcher->getParam('estado');
+    $id = $this->dispatcher->getParam('id');
+    $result = (Object) [
+      "completo" => false,
+      "mensaje" => "La operación no se pudo completar"
+    ];
+    $this->response->setStatusCode(422, 'Unprocessable Content');
+    $impuesto = Impuestos::findFirstById($id);
+    if ($impuesto) {
+      $impuesto->Estado = $activo == "true" ? 0 : 2;
+      if($impuesto->update()) {
+        $result->completo = true;
+        $result->mensaje = "Registro actualizado exitosamente";
+        $this->response->setStatusCode(201, 'Ok');
+      } else {
+        $result->mensaje = "Error al intentar modificar el impuesto";
+      }
+    } else {
+      $result->mensaje = "No se encontro el impuesto";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($result));
     $this->response->send();
   }
   #endregion

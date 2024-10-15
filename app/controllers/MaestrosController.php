@@ -7,6 +7,7 @@ use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\ClientesSri;
+use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Maestros\Proveedores;
@@ -509,9 +510,9 @@ class MaestrosController extends ControllerBase  {
       'bind' => [ 'ced' => $cedula, 'nom' => $nombre, 'id' => $id ]
     ]);
     $this->response->setStatusCode(200, 'Ok');
-    let result = [ existe = $rows->count() > 0 ];
+    $result = [ 'existe' => $rows->count() > 0 ];
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode(result));
+    $this->response->setContent(json_encode($result));
     $this->response->send();
   }
 
@@ -525,7 +526,7 @@ class MaestrosController extends ControllerBase  {
     $this->response->setStatusCode(422, 'Unprocessable Content');
     $proveedor = Proveedores::findFirstById($id);
     if ($proveedor) {
-      $proveedor->Estado = $activo == "true" ? 0 : 2;
+      $proveedor->Estado = $estado;
       if($proveedor->update()) {
         $result->completo = true;
         $result->mensaje = "Registro actualizado exitosamente";
@@ -630,9 +631,9 @@ class MaestrosController extends ControllerBase  {
   public function impuestosPorEstadoAction() {
     $this->view->disable();
     $estado = $this->dispatcher->getParam('estado');
-    $condiciones = ''
+    $condiciones = '';
     if ($estado == 0) {
-      $condiciones = 'Estado = 0'
+      $condiciones = 'Estado = 0';
     }
 
     $rows = Impuestos::find([
@@ -677,7 +678,7 @@ class MaestrosController extends ControllerBase  {
           $ret->msj = $msj;
         }
       } else {
-        if (!$neImp->create()) {
+        if (!$newImp->create()) {
           $this->response->setStatusCode(500, 'Error');  
           $msj = "No se pudo crear el nuevo impuesto: " . "\n";
           foreach ($newImp->getMessages() as $m) {
@@ -709,7 +710,7 @@ class MaestrosController extends ControllerBase  {
     $this->response->setStatusCode(422, 'Unprocessable Content');
     $impuesto = Impuestos::findFirstById($id);
     if ($impuesto) {
-      $impuesto->Estado = $activo == "true" ? 0 : 2;
+      $impuesto->Estado = $estado;
       if($impuesto->update()) {
         $result->completo = true;
         $result->mensaje = "Registro actualizado exitosamente";
@@ -729,7 +730,6 @@ class MaestrosController extends ControllerBase  {
   #endregion
 
   #region clientes sri
-
   public function clientesSriListaAction() {
     $estado     = $this->request->getQuery('estado', null, 1);
     $filtro     = $this->request->getQuery('filtro');

@@ -1,6 +1,7 @@
 composer.phar
 /vendor/
 /.vscode/
+/.idx/
 /certs/*.p12
 /.htaccess
 /*.htaccess

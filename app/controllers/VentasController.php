@@ -7,6 +7,7 @@ use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Ventas\Cajas;
+use Pointerp\Modelos\Ventas\CajaMovimientos;
 use Pointerp\Modelos\Ventas\Ventas;
 use Pointerp\Modelos\Ventas\VentasMin;
 use Pointerp\Modelos\Ventas\VentasItems;
@@ -19,6 +20,7 @@ use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Sucursales;
+use Phalcon\Paginator\Adapter\Model as PaginatorModel;
 
 class VentasController extends ControllerBase  {
 
@@ -72,6 +74,91 @@ class VentasController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
+
+  public function ventasBuscarPaginadoAction() {
+    $this->view->disable();
+    $suc = $this->dispatcher->getParam('sucursal'); // Solo se consulta una sucursal
+    $tipoBusca = $this->dispatcher->getParam('tipo');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $estado = $this->dispatcher->getParam('estado');
+    $clase = $this->dispatcher->getParam('clase');
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta');
+    try {
+      $page = $this->request->getQuery('page', null, 0);
+      $limit = $this->request->getQuery('limit', null, 0);
+      $order = $this->request->getQuery('order', null, 'Nombres');
+      $orderDir = $this->request->getQuery('dir', null, '');
+      $externo = $this->request->getQuery('ext', null, false);
+    } catch (Exception $ex) {
+      $page = 0;
+      $limit = 0;
+      $order = 'Nombres';
+      $orderDir = '';
+      $externo = false;
+    }
+
+    $condicion = "Tipo in (11, 12) AND SucursalId = :suc:";
+    $params = [ 'suc' => $suc ]
+    $ventas = (object) [
+      'completo' => false,
+      'total' => 0,
+      'items' => []
+    ];
+    if ($clase < 3) {      
+      if ($clase <= 1) {
+        $condicion .= " AND Fecha >= :desde: AND Fecha <= :hasta:";
+        $params = array_merge([ 'desde' => $desde, 'hasta' => $hasta ], $params);
+      } else {
+        if (strlen($filtro) > 1) {
+          if ($clase == 2) {
+            $filtro = str_replace('%20', ' ', $filtro);
+            if ($tipoBusca == 0) {
+              // Comenzando por
+              $filtro .= '%';
+            } else {
+              // Conteniendo
+              $filtroSP = str_replace('  ', ' ',trim($filtro));
+              $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+            }
+          }
+          $condicion .= " AND `Notas` like :filtro:";
+          $params = array_merge([ 'filtro' => $filtro ], $params);
+        }
+      }
+    } else {
+      $condicion .= " AND Numero = :filtro:";
+      $params = array_merge([ 'filtro' => $filtro ], $params);
+    }
+
+    $condicion .= ' AND Estado = 0';
+
+    $paginator = new PaginatorModel([
+      "model"      => Ventas::class,
+      "parameters" => [
+        'conditions' => $condicion,
+        'bind' => $params,
+        'order' => ($order ?? 'Fecha') . " {$orderDir}"
+      ],
+      "limit"      => $limit,
+      "page"       => $page,
+    ]);
+    $pageData = $paginator->paginate();
+    $ventas = (object) [
+      'completo' => true,
+      'total' => $pageData->getTotalItems(),
+      'items' => $pageData->getItems()
+    ];
+    
+    if (count($ventas->items) > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ventas));
     $this->response->send();
   }
 
@@ -1160,20 +1247,22 @@ class VentasController extends ControllerBase  {
       'msj' => 'Los datos no se pudieron procesar'
     ];
     try {
-      $newImp = new Cajas();
+      $newCaja = new Cajas();
       if ($datos->Id > 0) {
-        $newImp = Cajas::findFirstById($datos->Id);
+        $newCaja = Cajas::findFirstById($datos->Id);
       }
-      $newImp->Nombre = $datos->Nombre;
-      $newImp->Porcentaje = $datos->Porcentaje;
-      $newImp->CodigoEmision = $datos->CodigoEmision;
-      $newImp->CodigoPorcentaje = $datos->CodigoPorcentaje;
-      $newImp->Actualizado = date('Y-m-d H:i:s');
+      $newCaja->Codigo = $datos->Codigo;
+      $newCaja->Descripcion = $datos->Descripcion;
+      $newCaja->Saldo = $datos->Saldo;
+      $newCaja->Cierre = $datos->Cierre;
+      $newCaja->Estado = $datos->Estado;
+      $newCaja->EmpresaId = $datos->EmpresaId;
+      $newCaja->Referencia = $datos->Referencia;
       if ($datos->Id > 0) {
-        if (!$newImp->update()) {
+        if (!$newCaja->update()) {
           $this->response->setStatusCode(500, 'Error');  
-          $msj = "No se pudo actualizar el impuesto: " . "\n";
-          foreach ($newImp->getMessages() as $m) {
+          $msj = "No se pudo guadar la caja: " . "\n";
+          foreach ($newCaja->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->res = false;
@@ -1181,10 +1270,10 @@ class VentasController extends ControllerBase  {
           $ret->msj = $msj;
         }
       } else {
-        if (!$newImp->create()) {
+        if (!$newCaja->create()) {
           $this->response->setStatusCode(500, 'Error');  
-          $msj = "No se pudo crear el nuevo impuesto: " . "\n";
-          foreach ($newImp->getMessages() as $m) {
+          $msj = "No se pudo crear la nueva caja: " . "\n";
+          foreach ($newCaja->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->res = false;
@@ -1211,18 +1300,18 @@ class VentasController extends ControllerBase  {
       "mensaje" => "La operación no se pudo completar"
     ];
     $this->response->setStatusCode(422, 'Unprocessable Content');
-    $impuesto = Cajas::findFirstById($id);
-    if ($impuesto) {
-      $impuesto->Estado = $estado;
-      if($impuesto->update()) {
+    $caja = Cajas::findFirstById($id);
+    if ($caja) {
+      $caja->Estado = $estado;
+      if($caja->update()) {
         $result->completo = true;
         $result->mensaje = "Registro actualizado exitosamente";
         $this->response->setStatusCode(201, 'Ok');
       } else {
-        $result->mensaje = "Error al intentar modificar el impuesto";
+        $result->mensaje = "Error al intentar modificar la caja";
       }
     } else {
-      $result->mensaje = "No se encontro el impuesto";
+      $result->mensaje = "No se encontro la caja";
       $this->response->setStatusCode(404, 'Not found');
     }
 
@@ -1232,8 +1321,177 @@ class VentasController extends ControllerBase  {
   }
 
   // Vales
-  
+  public function valesBuscarAction() {
+    $this->view->disable();
+    $suc = $this->dispatcher->getParam('sucursal'); // Solo se consulta una sucursal
+    $tipoBusca = $this->dispatcher->getParam('tipo');
+    $filtro = $this->dispatcher->getParam('filtro');
+    $estado = $this->dispatcher->getParam('estado');
+    $clase = $this->dispatcher->getParam('clase');
+    $desde = $this->dispatcher->getParam('desde');
+    $hasta = $this->dispatcher->getParam('hasta'); 
+    try {
+      $page = $this->request->getQuery('page', null, 0);
+      $limit = $this->request->getQuery('limit', null, 0);
+      $order = $this->request->getQuery('order', null, 'Fecha');
+      $orderDir = $this->request->getQuery('dir', null, '');
+      $externo = $this->request->getQuery('ext', null, false);
+    } catch (Exception $ex) {
+      $page = 0;
+      $limit = 0;
+      $order = 'Nombres';
+      $orderDir = '';
+      $externo = false;
+    }
+
+    $condicion = "SucursalId = :suc:";
+    $params = [ 'suc' => $suc ];
+    $res = [];
+    if ($clase < 3) {      
+      if ($clase <= 1) {
+        $condicion .= ' AND Fecha >= :desde: AND Fecha <= :hasta:';
+        $params = array_merge([ 'desde' => $desde, 'hasta' => $hasta ], $params);
+      } else {
+        if (strlen($filtro) > 1) {
+          if ($clase == 2) {
+            $filtro = str_replace('%20', ' ', $filtro);
+            if ($tipoBusca == 0) {
+              // Comenzando por
+              $filtro .= '%';
+            } else {
+              // Conteniendo
+              $filtroSP = str_replace('  ', ' ',trim($filtro));
+              $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
+            }
+          }
+          $condicion .= " AND `Notas` like :filtro:";
+          $params = array_merge([ 'filtro' => $filtro ], $params);
+        }
+      }
+    } else {
+      $condicion .= " AND Numero = :filtro:";
+      $params = array_merge([ 'filtro' => $filtro ], $params);
+    }
+
+    if (strlen($condicion) > 0) {
+      $condicion .= ' AND Estado = 0';
+      $res = CajaMovimientos::find([
+        'conditions' => $condicion,
+        'bind' => $params,
+        'order' => 'Fecha'
+      ]);
+    }
+
+    $paginator = new PaginatorModel([
+      "model"      => CajaMovimientos::class,
+      "parameters" => [
+        'conditions' => $condicion,
+        'bind' => $params,
+        'order' => ($order ?? 'Fecha') . " {$orderDir}"
+      ],
+      "limit"      => $limit,
+      "page"       => $page,
+    ]);
+    $pageData = $paginator->paginate();
+    $vales = (object) [
+      'completo' => true,
+      'total' => $pageData->getTotalItems(),
+      'items' => $pageData->getItems()
+    ];
+
+    if ($pageData->getTotalItems() > 0) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($vales));
+    $this->response->send();
+  }
+
+  public function valeGuardarAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => $datos->Id,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    try {
+      $newCaja = new Cajas();
+      if ($datos->Id > 0) {
+        $newCaja = Cajas::findFirstById($datos->Id);
+      }
+      $newCaja->Codigo = $datos->Codigo;
+      $newCaja->Descripcion = $datos->Descripcion;
+      $newCaja->Saldo = $datos->Saldo;
+      $newCaja->Cierre = $datos->Cierre;
+      $newCaja->Estado = $datos->Estado;
+      $newCaja->EmpresaId = $datos->EmpresaId;
+      $newCaja->Referencia = $datos->Referencia;
+      if ($datos->Id > 0) {
+        if (!$newCaja->update()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo guadar la caja: " . "\n";
+          foreach ($newCaja->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      } else {
+        if (!$newCaja->create()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo crear la nueva caja: " . "\n";
+          foreach ($newCaja->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->response->setStatusCode(500, 'Error');  
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $ex->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function valeModificarEstadoAction() {
+    $estado = $this->dispatcher->getParam('estado');
+    $id = $this->dispatcher->getParam('id');
+    $result = (Object) [
+      "completo" => false,
+      "mensaje" => "La operación no se pudo completar"
+    ];
+    $this->response->setStatusCode(422, 'Unprocessable Content');
+    $vale = CajaMovimientos::findFirstById($id);
+    if ($vale) {
+      $vale->Estado = $estado;
+      if($vale->update()) {
+        $result->completo = true;
+        $result->mensaje = "Registro actualizado exitósamente";
+        $this->response->setStatusCode(201, 'Ok');
+      } else {
+        $result->mensaje = "Error al intentar modificar el vale";
+      }
+    } else {
+      $result->mensaje = "No se encontró el vale";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($result));
+    $this->response->send();
+  }
+
   // Ajustes de caja
+  // Crear ajuste caja
 
   #endregion
 }

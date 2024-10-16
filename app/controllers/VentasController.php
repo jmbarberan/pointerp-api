@@ -6,6 +6,7 @@ use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Inventarios\Kardex;
+use Pointerp\Modelos\Ventas\Cajas;
 use Pointerp\Modelos\Ventas\Ventas;
 use Pointerp\Modelos\Ventas\VentasMin;
 use Pointerp\Modelos\Ventas\VentasItems;
@@ -717,7 +718,6 @@ class VentasController extends ControllerBase  {
     $this->response->setContent(json_encode($num));
     $this->response->send();
   }
-  #endregion
 
   private function ultimoNumeroVenta($tipo, $suc) {
     try {
@@ -1048,7 +1048,7 @@ class VentasController extends ControllerBase  {
   }
 
   private function generarClaveAcceso($sucursalId) {
-    #region Secuencial
+    // Secuencial
     $sucursal = Sucursales::findFirstById($sucursalId);
     $empresa = Empresas::findFirstById($sucursal->EmpresaId);
     $serie = $sucursal->Codigo . trim($sucursal->Descripcion);
@@ -1060,7 +1060,7 @@ class VentasController extends ControllerBase  {
       'ambiente' => '1' // 1: PRUEBAS; 2: PRODUCCION
     ];
 
-    #region Ambiente
+    // Ambiente
     $ruc = "9999999999999";
     if (isset($empresa)) {
       $ruc = $empresa->Ruc;
@@ -1068,9 +1068,8 @@ class VentasController extends ControllerBase  {
       if (isset($reg))
         $tipoDatos->ambiente = $reg->Codigo;
     }
-    #endregion
 
-    #region Clave de acceso
+    // Clave de acceso
     $fecha = new \DateTime();
     $codigoAleatorio = self::codigoAleatorio();
     if (strlen($codigoAleatorio) > 8) {
@@ -1089,9 +1088,6 @@ class VentasController extends ControllerBase  {
       $codigoAleatorio .
       $tipoDatos->tipoEmision;
     $clave .= strval(self::calcularDigitoVerificadorCadena($clave));
-    #endregion
-
-    
 
     $retorno = (object) [
       'clave' => $clave,
@@ -1131,4 +1127,113 @@ class VentasController extends ControllerBase  {
 
     return $numSig;
   }
+
+  #endregion
+
+  #region cajas
+  public function cajasPorEstadoAction() {
+    $this->view->disable();
+    $estado = $this->dispatcher->getParam('estado');
+    $condiciones = '';
+    if ($estado == 0) {
+      $condiciones = 'Estado = 0';
+    }
+
+    $rows = Cajas::find([
+      'conditions' => $condiciones,
+    ]);
+    if ($rows->count() > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json');    
+    $this->response->setContent(json_encode($rows));
+    $this->response->send();
+  }
+
+  public function cajaGuardarAction() {
+    $datos = $this->request->getJsonRawBody();
+    $ret = (object) [
+      'res' => false,
+      'cid' => $datos->Id,
+      'msj' => 'Los datos no se pudieron procesar'
+    ];
+    try {
+      $newImp = new Cajas();
+      if ($datos->Id > 0) {
+        $newImp = Cajas::findFirstById($datos->Id);
+      }
+      $newImp->Nombre = $datos->Nombre;
+      $newImp->Porcentaje = $datos->Porcentaje;
+      $newImp->CodigoEmision = $datos->CodigoEmision;
+      $newImp->CodigoPorcentaje = $datos->CodigoPorcentaje;
+      $newImp->Actualizado = date('Y-m-d H:i:s');
+      if ($datos->Id > 0) {
+        if (!$newImp->update()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo actualizar el impuesto: " . "\n";
+          foreach ($newImp->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      } else {
+        if (!$newImp->create()) {
+          $this->response->setStatusCode(500, 'Error');  
+          $msj = "No se pudo crear el nuevo impuesto: " . "\n";
+          foreach ($newImp->getMessages() as $m) {
+            $msj .= $m . "\n";
+          }
+          $ret->res = false;
+          $ret->cid = 0;
+          $ret->msj = $msj;
+        }
+      }
+    } catch (Exception $ex) {
+      $this->response->setStatusCode(500, 'Error');  
+      $ret->res = false;
+      $ret->cid = 0;
+      $ret->msj = $ex->getMessage();
+    }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function cajaModificarEstadoAction() {
+    $estado = $this->dispatcher->getParam('estado');
+    $id = $this->dispatcher->getParam('id');
+    $result = (Object) [
+      "completo" => false,
+      "mensaje" => "La operación no se pudo completar"
+    ];
+    $this->response->setStatusCode(422, 'Unprocessable Content');
+    $impuesto = Cajas::findFirstById($id);
+    if ($impuesto) {
+      $impuesto->Estado = $estado;
+      if($impuesto->update()) {
+        $result->completo = true;
+        $result->mensaje = "Registro actualizado exitosamente";
+        $this->response->setStatusCode(201, 'Ok');
+      } else {
+        $result->mensaje = "Error al intentar modificar el impuesto";
+      }
+    } else {
+      $result->mensaje = "No se encontro el impuesto";
+      $this->response->setStatusCode(404, 'Not found');
+    }
+
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($result));
+    $this->response->send();
+  }
+
+  // Vales
+  
+  // Ajustes de caja
+
+  #endregion
 }

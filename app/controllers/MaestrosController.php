@@ -16,16 +16,34 @@ use Phalcon\Paginator\Adapter\Model as PaginatorModel;
 class MaestrosController extends ControllerBase  {
   
   #region Clientes
+  public function clientePorIdAction() {
+    $this->view->disable();
+    $id = $this->dispatcher->getParam('id');
+    $res = Clientes::findFirstById($id);
+
+    if ($res != null) {
+        $this->response->setStatusCode(200, 'Ok');
+    } else {
+        $res = [];
+        $this->response->setStatusCode(404, 'Not found');
+    }
+    
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($res));
+    $this->response->send();
+  }
   public function clientesPorCedulaAction() {
     $this->view->disable();
     $filtroEmp = '';
     $paramsEmp = [];
     try {
       $emp = $this->request->getQuery('emp', null, 0);
-      $filtroEmp = 'EmpresaId = :emp: AND ';
-      $paramsEmp = [ 'emp' => $emp ];
+      if ($emp > 0) {
+        $filtroEmp = 'EmpresaId = :emp: AND ';
+        $paramsEmp = [ 'emp' => $emp ];
+      }
     } catch (Exception $ex) {
-      
+      $errorMsg = $ex;
     }
     $ced = $this->dispatcher->getParam('ced');
     $rows = Clientes::find([
@@ -60,7 +78,6 @@ class MaestrosController extends ControllerBase  {
     $this->response->setContent(json_encode($rows));
     $this->response->send();
   }
-
   public function clientesBuscarAction() {
     $estado = $this->dispatcher->getParam('estado');
     $filtro = $this->dispatcher->getParam('filtro');
@@ -105,8 +122,19 @@ class MaestrosController extends ControllerBase  {
     
     $condicion .= strlen($condicion) > 0 ? " AND " : "";
     if ($atrib != 'Nombres') {
-      $condicion .= "{$atrib} = :fil:";
-    } else {
+      if (is_numeric($atrib)) {
+        if ($atrib != 0) {
+          $atribNom = $atrib == 1 ? 'Identificacion' : 'Codigo';
+          $condicion .= "{$atribNom} = :fil:";  
+        } else {
+          $filtroSP = strtoupper($filtroSP);
+          $filtro = '%' . str_replace(' ' , '%', $filtroSP) . '%';
+          $condicion .= "UPPER(Nombres) LIKE :fil:";
+        }
+      } else {
+        $condicion .= "{$atrib} = :fil:";
+      }
+    } else {    
       $filtroSP = strtoupper($filtroSP);
       $filtro = '%' . str_replace(' ' , '%', $filtroSP) . '%';
       $condicion .= "UPPER({$atrib}) LIKE :fil:";
@@ -225,7 +253,7 @@ class MaestrosController extends ControllerBase  {
     $this->response->send();
   }
 
-  public function guardarClienteAction() {
+  public function clienteGuardarAction() {
     $datos = $this->request->getJsonRawBody();
     $ret = (object) [
       'res' => false,
@@ -247,13 +275,20 @@ class MaestrosController extends ControllerBase  {
       $newcli->Telefonos = $datos->Telefonos;
       $newcli->Ciudad = $datos->Ciudad;
       $newcli->CiudadId = $datos->CiudadId;
+      $newcli->Referencias = $datos->Referencias ?? '';
+      $newcli->Cupo = $datos->Cupo ?? 0;
       $newcli->Estado = $datos->Estado;
       if ($datos->Id > 0) {
-        if (!$newcli->update()) {
+        if ($newcli->update()) {
+          $this->response->setStatusCode(201, 'Ok');  
+          $ret->res = true;
+          $ret->cid = $newcli->Id;
+          $ret->msj = "Cliente guardado exitosamente";
+        } else {
           $this->response->setStatusCode(500, 'Error');  
-          $msj = "No se pudo actualizar el cliente: " . "\n";
+          $msj = "No se pudo actualizar el cliente: \n";
           foreach ($newcli->getMessages() as $m) {
-            $msj .= $m . "\n";
+            $msj .= "{$m} \n";
           }
           $ret->res = false;
           $ret->cid = 0;
@@ -263,8 +298,8 @@ class MaestrosController extends ControllerBase  {
         $newcod = $datos->Codigo;
         if (strlen($datos->Codigo) <= 0) {
           $di = Di::getDefault();
-          $phql = 'SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Clientes 
-              WHERE Estado = 0 AND EmpresaId = ' . $datos->EmpresaId;
+          $phql = "SELECT MAX(Codigo) as maxcod FROM Pointerp\Modelos\Maestros\Clientes 
+              WHERE Estado = 0 AND EmpresaId = {$datos->EmpresaId}";
           $qry = new Query($phql, $di);
           $rws = $qry->execute();
           if ($rws->count() === 1) {
@@ -272,24 +307,24 @@ class MaestrosController extends ControllerBase  {
             try {
               $num = intval($rmax['maxcod']);
             } catch (Exception $e) {
-              //$msjr = $msjr . "\n" . "Codigo: " . $rmax['maxcod'] . "\n" . $e->getMessage();
               $num = 0;
             }
           }
           
-          if ($num == 0)
-            $num = 1000;
-          else
-            $num += 1;
-
+          $num = $num == 0 ? 1000 : $num + 1;
           $newcod = strval($num);
         }
         $newcli->Codigo = $newcod;
-        if (!$newcli->create()) {
+        if ($newcli->create()) {
+          $this->response->setStatusCode(201, 'Ok');  
+          $ret->res = true;
+          $ret->cid = $newcli->Id;
+          $ret->msj = "Cliente creado exitosamente";
+        } else {
           $this->response->setStatusCode(500, 'Error');  
-          $msj = "No se pudo crear el nuevo cliente: " . "\n";
+          $msj = "No se pudo crear el nuevo cliente: \n";
           foreach ($newcli->getMessages() as $m) {
-            $msj .= $m . "\n";
+            $msj .= "{$m} \n";
           }
           $ret->res = false;
           $ret->cid = 0;
@@ -630,7 +665,7 @@ class MaestrosController extends ControllerBase  {
   #region Impuestos
   public function impuestosPorEstadoAction() {
     $this->view->disable();
-    $estado = $this->dispatcher->getParam('estado');
+    $estado = $this->dispatcher->getParam('est');
     $condiciones = '';
     if ($estado == 0) {
       $condiciones = 'Estado = 0';
@@ -727,6 +762,10 @@ class MaestrosController extends ControllerBase  {
     $this->response->setContent(json_encode($result));
     $this->response->send();
   }
+  #endregion
+
+  #region Tablas
+
   #endregion
 
   #region clientes sri

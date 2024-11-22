@@ -63,6 +63,10 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'productoRegistrado',
     ]);
+    $this->addGet('/productos/imagen/{id}', [
+      'controller' => $controlador,
+      'action'     => 'imagenProductoPorId',
+    ]);
 
     // MOVIMIENTOS
     $this->addGet('/movimientos/{id}', [

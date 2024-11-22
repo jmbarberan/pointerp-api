@@ -56,6 +56,8 @@ try {
     $application = new \Phalcon\Mvc\Application($di);
 
     include APP_PATH . '/library/ComprobantesElectronicos.php';
+    include APP_PATH . '/models/Constantes.php';
+
 
     date_default_timezone_set('America/Guayaquil');
     echo $application->handle($_SERVER['REQUEST_URI'])->getContent();

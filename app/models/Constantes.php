@@ -1,194 +1,83 @@
 <?php
 
-Define("Cero", 0);
-Define("EnClientes", 1);
-Define("EnProductos", 2);
-Define("EnImpuestos", 3);
-Define("EnEmpresas", 4);
-Define("EnProveedores", 5);
-Define("EnIngresosBodega", 6);
-Define("EnEgresosBodega", 7);
-Define("EnInventarioFisico", 8);
-Define("EnAjustesIngreso" , 9);
-Define("EnAjustesEgreso", 10);
-Define("EnFactura", 11);
-Define("EnNotaVenta", 12);
-Define("EnDevolucion", 13);
-Define("EnNotaCredito", 14);
-Define("EnNotaDebito", 15);
-Define("EnCobro", 16);
-Define("EnUsuarios", 17);
-Define("EnPrivilegios", 18);
-Define("EnCompra", 19);
-Define("EnNotaIngreso", 20);
-Define("EnNotaDevolucion", 21);
-Define("EnCuentaBancaria", 22);
-/*[Description("Cheque")]
-EnCheque,
-[Description("Deposito")]
-EnDeposito,
-[Description("Retiro")] // 25
-EnRetiros,
-[Description("Nota de credito")]
-EnNotasCreditoBanco,
-[Description("Nota de debito")]
-EnNotasDebitoBanco,
+# Maestros
+define("CERO", 0);
+define("CLIENTES", 1);
+define("PRODUCTOS", 2);
+define("IMPUESTOS", 3);
+define("EMPRESAS", 4);
+define("PROVEEDORES", 5);
 
-#endregion
+# Inventarios
+define("INGRESOS_BODEGA", 6);
+define("EGRESOS_BODEGA", 7);
+define("INVENTARIO_FISICO", 8);
+define("AJUSTES_INGRESO", 9);
+define("AJUSTES_EGRESO", 10);
 
-#region Impuestos
-[Description("Retencion en la fuente")] // 28 // Emitida
-EnRetencionEmitida,
-[Description("Retencion recibida")]
-EnRetencionRecibida,
+# Ventas
+define("FACTURA", 11);
+define("NOTA_VENTA", 12);
+define("DEVOLUCION", 13);
 
-#endregion
+# Cxc
+define("NOTA_CREDITO", 14);
+define("NOTA_DEBITO", 15);
+define("COBRO", 16);
 
-#region Cajas
+# Seguridad
+define("USUARIOS", 17);
+define("PRIVILEGIOS", 18);
 
-[Description("Caja")] // 30
-EnCajas,
-[Description("Vale de caja")]
-EnValeCaja,
-[Description("Ajuste de caja faltante")]
-EnAjusteCajaFaltante,
-[Description("Ajuste de caja subrante")]
-EnAjusteCajaSobrante,
+# Compras
+define("COMPRA", 19);
+define("NOTA_INGRESO", 20);
+define("NOTA_DEVOLUCION", 21);
 
-#endregion
+# Bancos
+define("CUENTA_BANCARIA", 22);
+define("CHEQUE", 23);
+define("DEPOSITO", 24);
+define("RETIROS", 25);
+define("NOTAS_CREDITO_BANCO", 26);
+define("NOTAS_DEBITO_BANCO", 27);
 
-#region Pagos
+# Impuestos
+define("RETENCION_EMITIDA", 28);
+define("RETENCION_RECIBIDA", 29);
 
-[Description("Pago")] //34
-EnPago,
+# Cajas
+define("CAJAS", 30);
+define("VALE_CAJA", 31);
+define("AJUSTE_CAJA_FALTANTE", 32);
+define("AJUSTE_CAJA_SOBRANTE", 33);
 
-#endregion
+# Pagos
+define("PAGO", 34);
 
-#region Metodos de cobro
-[Description("Cobro en efectivo")]
-EnCobroEfectivo,
+# Metodos de cobro
+define("COBRO_EFECTIVO", 35);
+define("COBRO_CHEQUE", 36);
+define("COBRO_TARJETA", 37);
+define("COBRO_OTROS_METODOS", 38);
 
-[Description("Cobro en cheque")]
-EnCobroCheque,
+# Contabilidad
+define("ASIENTO_REGULAR", 39);
+define("ASIENTO_CIERRE", 40);
+define("ASIENTO_APERTURA", 41);
+define("ASIENTO_PARTIDA", 42);
 
-[Description("Cobro con tarjeta")] // 37
-EnCobroTarjeta,
-
-[Description("Cobro con otros medios")]
-EnCobroOtrosMetodos,
-
-#endregion
-
-#region Contabilidad
-
-[Description("Asiento contable regular")] // 39
-EnAsientoRegular,
-
-[Description("Asiento de cierre de ejercicio")]
-EnAsientoCierre,
-
-[Description("Asiento de apertura")] // 41
-EnAsientoApertura,
-
-[Description("Asiento de partida")]
-EnAsientoPartida,
-
-#endregion
-
-#region Varios
-
-[Description("Guia de remision")] // 43
-EnGuiaRemision,
-
-[Description("Devolucion de compra")] 
-EnDevolucionCompra,
-
-[Description("Cuadre de caja")] 
-EnCuadreCaja,
-
-[Description("Comprobante de egreso")] // 46
-EnOtroPago,
-
-[Description("Pedido")]
-EnPedido,
-
-[Description("Proforma")]
-EnProforma,
-
-[Description("Pedido")] // 49
-EnPedidoCompra,
-
-[Description("Lote de Comprobantes electronicos")]
-EnCELote,
-
-[Description("Cobro con N.C. saldo a favor")]
-EnCobroSaldoFavor,
-
-[Description("Abono parcial en efectivo")]
-EnAbonosEfectivo,
-
-EnBodega, // 53
-EnSucursal,
-
-[Description("Transferencia de caja")] // 55
-EnTransferenciaCaja,
-define('', 0)
-
-
-[Description("Cero")]
-EnCero,
-
-[Description("Comprobantes Electronicos / Datos de correo")]
-EnComprobantesElectronicosCorreo,
-
-[Description("Claves de establecimientos")]
-EnClavesEstablecimientos,
-
-[Description("Cuentas cierres contables")]
-EnCuentasCierresContables,
-
-[Description("Dias antes de autorizar comprobantes")]
-EnDiasEsperaAutorizacionComprobantes,
-
-[Description("Generar clave de acceso no autorizada")] // 5
-EnGenerarClaveAccesoNoAutorizada,
-
-[Description("Guardar numero serie")] // 6
-EnGuardarNumeroSerie,
-
-[Description("Siete")]
-EnSiete,
-
-[Description("Ocho")]
-EnOcho,
-
-[Description("Nueve")] 
-EnNueve,
-
-[Description("Nota al pie Factura")] 
-EnNotaAlPieFactura,
-
-[Description("Autorizar al guardar")] // 11
-EnAutorizarFacturaAlGuardar,
-
-[Description("Autorizar consumidor final")]
-EnAutorizarCondumidorFinal,
-
-[Description("Mostrar Dialogo Impresion")]
-EnMostrarDialogoImpresion,
-
-[Description("Enviar Correo al Guardar")] // 14 // MRMICAS ES GENERAR CODIGO UNICO
-EnEnviarCorreoAlGuardar,
-
-[Description("Enviar Correo al Guardar1")] // 15
-EnEnviarCorreoAlGuardar1,
-
-[Description("Modo punto de venta")] // 16
-EnFacturaPuntoVenta,
-
-[Description("Imprimir antes de guardar")] // 17
-EnImprimirAntesDeGuardar,
-
-[Description("Imprimir por JSON")] // 18
-EnImprimirPorJSON,*/
-
+# Varios
+define("GUIA_REMISION", 43);
+define("DEVOLUCION_COMPRA", 44);
+define("CUADRE_CAJA", 45);
+define("OTRO_PAGO", 46);
+define("PEDIDO", 47);
+define("PROFORMA", 48);
+define("PEDIDO_COMPRA", 49);
+define("CELOTE", 50);
+define("COBRO_SALDO_FAVOR", 51);
+define("ABONOS_EFECTIVO", 52);
+define("BODEGA", 53);
+define("SUCURSAL", 54);
+define("TRANSFERENCIA_CAJA", 55);

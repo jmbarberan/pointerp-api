@@ -6,8 +6,9 @@ use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Inventarios\Kardex;
-use Pointerp\Modelos\Ventas\Cajas;
+use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\Ventas\CajaMovimientos;
+use Pointerp\Modelos\Ventas\Cajas;
 use Pointerp\Modelos\Ventas\Ventas;
 use Pointerp\Modelos\Ventas\VentasMin;
 use Pointerp\Modelos\Ventas\VentasItems;
@@ -101,7 +102,7 @@ class VentasController extends ControllerBase  {
     }
 
     $condicion = "Tipo in (11, 12) AND SucursalId = :suc:";
-    $params = [ 'suc' => $suc ]
+    $params = [ 'suc' => $suc ];
     $ventas = (object) [
       'completo' => false,
       'total' => 0,
@@ -246,6 +247,7 @@ class VentasController extends ControllerBase  {
           $nuevoCliente->Telefonos = $cliente->Telefonos;
           $nuevoCliente->Email = $cliente->Email;
           $nuevoCliente->IdentificacionTipo = $cliente->IdentificacionTipo;
+          $nuevoCliente->Referencias = '';
           $nuevoCliente->Cupo = 0;
           $nuevoCliente->Estado = 0;
           if ($nuevoCliente->create()) {
@@ -299,7 +301,11 @@ class VentasController extends ControllerBase  {
             if ($eli != false) {
               $eli->delete();
             }
-          }          
+          }
+          // eliminar ventaimpuestos
+          $phqle = "DELETE FROM Pointerp\Modelos\Ventas\VentasImpuestos WHERE VentaId = {$datos->Id}";
+          $qrye = new Query($phqle, Di::getDefault());
+          $qrye->execute();
           // crear los items nuevos y acuatualizar los modiifcados
           foreach ($datos->relItems as $mi) {            
             $ins = null;
@@ -326,26 +332,38 @@ class VentasController extends ControllerBase  {
                 $ins->create();
               }
             }
+            if ($datos->Tipo == FACTURA) {
+              foreach ($mi->relProducto->relImposiciones as $imps)
+              {
+                $valor = 0;
+                $porcentaje = 0;
+                if (isset($imps->relImpuesto))
+                {
+                  $porcentaje = $imps->relImpuesto->Porcentaje;
+                  $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                }
+                else
+                {
+                  $impuesto = Impuestos::FindById($imps->ImpuestoId);
+                  if (isset($impuesto))
+                    $porcentaje = $impuesto->Porcentaje;
+                    $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                }
+
+                if ($valor > 0) {
+                  $vimp = new VentasImpuestos();
+                  $vimp->ImpuestoId = $imps->ImpuestoId;
+                  $vimp->Porcentaje = $porcentaje;
+                  $vimp->Valor = round($valor, 2);
+                  $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                  array_push($datos->relImpuestos, $vimp);
+                }
+              }
+            }
           }
           
-          // Procesar items de impuestos          
-          foreach ($datos->relImpuestos as $imp) {
-            $ins = VentasImpuestos::findFirst([
-              'conditions' => 'VentaId = ' . $ven->Id . ' AND ImpuestoId = ' . $imp->ImpuestoId
-            ]);
-            if ($ins != null) {
-              $ins->Porcentaje = $imp->Porcentaje;
-              $ins->base = $imp->base;
-              $ins->Valor = $imp->Valor;
-              if (!$ins->update()) {
-                $msj = "No se puede actualizar los datos: ";
-                foreach ($ins->getMessages() as $m) {            
-                  $msj .= $m . " ";
-                }
-                $ret->res = false;
-                $ret->msj = $msj;
-              }
-            } else {
+          if ($datos->Tipo == FACTURA) {        
+            foreach ($datos->relImpuestos as $imp) {
               $o = new VentasImpuestos();
               $o->Id = 0;
               $o->CompraId = $ven->Id;
@@ -354,9 +372,9 @@ class VentasController extends ControllerBase  {
               $o->base = $imp->base;
               $o->Valor = $imp->Valor;
               if (!$o->create()) {
-                $msj = "No se puede actualizar los datos: ";
+                $msj = "No se puede actualizar los datos: \n";
                 foreach ($o->getMessages() as $m) {
-                  $msj .= $m . " ";
+                  $msj .= "{$m} \n";
                 }
                 $ret->res = false;
                 $ret->msj = $msj;
@@ -872,12 +890,6 @@ class VentasController extends ControllerBase  {
           $ret->msj = "Error al crear el cliente: {$resp}";
           $guardar = false;
         }
-        /*$ret->ven = $min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
-      } else {
-        $msj = "No se pudo crear el nuevo registro: \n";
-        foreach ($ven->getMessages() as $m) {
-          $msj .= $m . "\n";
-        }*/
       }
       if ($guardar) {
         $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
@@ -935,23 +947,53 @@ class VentasController extends ControllerBase  {
             }
             $ins->Costo = $mi->Costo;
             $ins->create();
+            if ($datos->Tipo == FACTURA) {
+              foreach ($mi->relProducto->relImposiciones as $imps)
+              {
+                $valor = 0;
+                $porcentaje = 0;
+                if (isset($imps->relImpuesto))
+                {
+                  $porcentaje = $imps->relImpuesto->Porcentaje;
+                  $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                }
+                else
+                {
+                  $impuesto = Impuestos::FindById($imps->ImpuestoId);
+                  if (isset($impuesto))
+                    $porcentaje = $impuesto->Porcentaje;
+                    $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                }
+
+                if ($valor > 0) {
+                  $vimp = new VentasImpuestos();
+                  $vimp->ImpuestoId = $imps->ImpuestoId;
+                  $vimp->Porcentaje = $porcentaje;
+                  $vimp->Valor = round($valor, 2);
+                  $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                  array_push($datos->relImpuestos, $vimp);
+                }
+              }
+            }
           }
-          foreach ($datos->relImpuestos as $im) {
-            $ins = new VentasImpuestos();
-            $ins->VentaId = $ven->Id;
-            $ins->ImpuestoId = $im->ImpuestoId;
-            $ins->Porcentaje = $im->Porcentaje;
-            $ins->base = $im->base;
-            $ins->Valor = $im->Valor;
-            $ins->create();
+          if ($datos->Tipo == FACTURA) {
+            foreach ($datos->relImpuestos as $im) {
+              $ins = new VentasImpuestos();
+              $ins->VentaId = $ven->Id;
+              $ins->ImpuestoId = $im->ImpuestoId;
+              $ins->Porcentaje = $im->Porcentaje;
+              $ins->base = $im->base;
+              $ins->Valor = $im->Valor;
+              $ins->create();
+            }
           }
-          $ret->ven = $ven; //$min ? VentasMin::findFirstById($ret->cid) : Ventas::findFirstById($ret->cid);
+          $ret->ven = $ven;
           $ret->cve = $datos->CEClaveAcceso;
           $ret->sec = $datos->CERespuestaTipo;
         } else {
-          $msj = "No se pudo crear el nuevo registro: " . "\n";
+          $msj = "No se pudo crear el nuevo registro: \n";
           foreach ($ven->getMessages() as $m) {
-            $msj .= $m . "\n";
+            $msj .= "{$m} \n";
           }
           $ret->cid = 0;
           $ret->msj = $msj;
@@ -1489,6 +1531,302 @@ class VentasController extends ControllerBase  {
     $this->response->setContent(json_encode($result));
     $this->response->send();
   }
+
+  public function cuadreCajaMovimientosAction() {
+    $caja = $this->request->getQuery('caja', null, 0);
+    $sucursal = $this->request->getQuery('sucursal', null, 0);
+    $desde = $this->request->getQuery('desde', null, null);
+    $hasta = $this->request->getQuery('hasta', null, null);
+    $referenciales = $this->request->getQuery('referenciales', null, false);
+    
+    $result = [];
+    $condicionSucursal = '';
+    $paramSucursal = [];
+    if (true) {
+      $condicionSucursal = " AND SucursalId == :sucursal:";
+      $paramSucursal = [ 'sucursal' => $sucursal ];
+    }
+    
+    // Vales de transferencia
+    $sumaTransfers = CajaMovimientos::sum([
+      'column'     => 'Valor', //$empresa = Empresas::findFirstById($sucursal->EmpresaId);
+      'condition' => "Tipo = " . TRANSFERENCIA_CAJA . "{$condicionSucursal} AND CajaId == :caja: AND Estado == 0 AND Fecha BETWEEN :desde: AND :hasta:",
+      'bind' => [ 
+        'caja' => $caja,
+        'desde' => $desde,
+        'hasta' => $hasta,
+        ...$paramSucursal
+      ]
+    ]);
+    if ($sumaTransfers > 0) {
+      $result[] = [
+        "Descripcion" => "Transferencia de caja",
+        "Valor" => $sumaTransfers
+      ];
+    }
+
+    // Traer cobros en efectivo del periodo
+    $cobrosContado = $this->modelsManager->createBuilder()
+      ->columns([
+        'SUM(ci.Valor)'
+      ])
+      ->from(['d' => 'ComprobanteDocumentos'])
+      ->join('Comprobantes', 'd.ComprobanteId = c.Id', 'c')
+      ->join('ComprobanteItems', 'd.ComprobanteId = ci.ComprobanteId', 'ci')
+      ->join('Ventas', 'd.Referencia = v.Id', 'v')
+      ->where('c.Tipo = :tipo:', ['tipo' => COBRO])
+      ->andWhere('ci.Origen = :origen:', ['origen' => COBRO_EFECTIVO])
+      ->andWhere('c.Estado = 0')
+      ->andWhere('ci.Numero = :numero:', ['numero' => $caja])
+      ->andWhere('c.SucursalId = :sucursalId:', ['sucursalId' => $sucursal])
+      ->andWhere('c.Concepto != :concepto:', ['concepto' => ABONOS_EFECTIVO])
+      ->andWhere('c.Fecha BETWEEN :desde: AND :hasta:', ['desde' => $desde, 'hasta' => $hasta])
+      ->andWhere('Date(v.Fecha) = Date(c.Fecha)')
+      ->getQuery()
+      ->execute();
+
+    if ($cobrosContado != null && $cobrosContado > 0) {
+      $result[] = [
+        "Descripcion" => "Ventas del periodo cobradas en efectivo",
+        "Valor" => $cobrosContado
+      ];
+    }
+
+    $cobrosCartera = $this->modelsManager->createBuilder()
+      ->columns([
+        'SUM(ci.Valor)'
+      ])
+      ->from(['d' => 'comprobantedocumentos'])
+      ->join('comprobantes', 'd.ComprobanteId = c.Id', 'c')
+      ->join('comprobanteitems', 'd.ComprobanteId = ci.ComprobanteId', 'ci')
+      ->join('ventas', 'd.Referencia = v.Id', 'v')
+      ->where('c.Tipo = :tipo:', ['tipo' => COBRO])
+      ->andWhere('ci.Origen = :origen:', ['origen' => COBRO_EFECTIVO])
+      ->andWhere('c.Estado = 0')
+      ->andWhere('ci.Numero = :numero:', ['numero' => $caja])
+      ->andWhere('c.SucursalId = :sucursalId:', ['sucursalId' => $sucursal])
+      ->andWhere('c.Concepto != :concepto:', ['concepto' => ABONOS_EFECTIVO])
+      ->andWhere('c.Fecha BETWEEN :desde: AND :hasta:', ['desde' => $desde, 'hasta' => $hasta])
+      ->andWhere('Date(v.Fecha) < Date(c.Fecha)')
+      ->getQuery()
+      ->execute();
+
+    if ($cobrosCartera != null && $cobrosCartera > 0) {
+      $result[] = [
+        "Descripcion" => "Ventas anteriores cobradas en efectivo",
+        "Valor" => $cobrosCartera
+      ];
+    }
+    
+    // Traer abonos en efectivo a pedidos reservados del periodo
+    $abonosPedidos = $this->modelsManager->createBuilder()
+      ->columns([
+        'SUM(ci.Valor)'
+      ])
+      ->from(['ci' => 'comprobanteitems'])
+      ->join('comprobantes', 'ci.ComprobanteId = c.Id', 'c')
+      ->where('c.Tipo = :tipo:', ['tipo' => COBRO])
+      ->andWhere('ci.Origen = :origen:', ['origen' => COBRO_EFECTIVO])
+      ->andWhere('c.Estado = 0')
+      ->andWhere('ci.Numero = :numero:', ['numero' => $caja])
+      ->andWhere('c.SucursalId = :sucursalId:', ['sucursalId' => $sucursal])
+      ->andWhere('c.Concepto = :concepto:', ['concepto' => ABONOS_EFECTIVO])
+      ->andWhere('c.Fecha BETWEEN :desde: AND :hasta:', ['desde' => $desde, 'hasta' => $hasta])
+      ->getQuery()
+      ->execute();
+    if ($abonosPedidos != null && $abonosPedidos > 0) {
+      $result[] = [
+        "Descripcion" => "Abonos a pedidos reservados con efectivo del periodo",
+        "Valor" => $abonosPedidos
+      ];
+    }
+
+    // Traer cheques postfechados ejecutados en efectivo (cambiados por ventanilla o pagos en efectivo por el cliente)
+    // (16 = EnCobro, 36 = CobroCheque, Base 1 = Ejecutado, Autorizacion 2 = Caja chica)
+    $chequesEjecutados = $this->modelsManager->createBuilder()
+      ->columns([
+        'SUM(ci.Valor)'
+      ])
+      ->from(['ci' => 'comprobanteitems'])
+      ->join('comprobantes', 'ci.ComprobanteId = c.Id', 'c')
+      ->where('c.Tipo = :tipo:', ['tipo' => COBRO])
+      ->andWhere('ci.Origen = :origen:', ['origen' => COBRO_CHEQUE])
+      ->andWhere('ci.Base = 1')
+      ->andWhere('ci.Autorizacion = 2')
+      ->andWhere('c.Estado = 0')
+      ->andWhere('c.SucursalId = :sucursalId:', ['sucursalId' => $sucursal])
+      ->andWhere('c.Concepto = :concepto:', ['concepto' => ABONOS_EFECTIVO])
+      ->andWhere('c.Fecha BETWEEN :desde: AND :hasta:', ['desde' => $desde, 'hasta' => $hasta])
+      ->getQuery()
+      ->execute();
+    if ($chequesEjecutados != null && $chequesEjecutados > 0) {
+      $result[] = [
+        "Descripcion" => "Abonos a pedidos reservados con efectivo del periodo",
+        "Valor" => $chequesEjecutados
+      ];
+    }
+    /*
+    from ci in Contexto.ComprobanteItems
+        join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+        where c.Tipo == (int)EntidadesEnum.EnCobro && ci.Origen == (int)EntidadesEnum.EnCobroCheque && ci.Base == 1 &&
+        ci.Autorizacion == "2" && c.Estado == 0 && ci.Fraccion == pCaja &&
+        c.SucursalId == psuc && ci.Ejecucion >= pFini && ci.Ejecucion <= pFcor
+     */
+
+    // Traer vales de caja (31 = EnValeCaja)
+    // Traer Pago a proveedores (34 = EnPago; 31 = EnValeCaja)
+    // Traer Otros Pagos en efectivo (46 = EnOtroPago; 31 = EnValeCaja)
+    if ($referenciales) {
+
+    }
+
+    return $result;
+  }
+
+  /*public IEnumerable<CuadreCajaItem> CuadreCajaMovimientos(int pCaja, DateTime pFini, DateTime pFcor, int psuc, bool referenciales)
+  {
+    
+
+    if (referenciales)
+    {
+        // Cobros con tarjeta de credito
+        IEnumerable<CobroPeriodo> cobst =
+            (from ci in Contexto.ComprobanteItems
+             join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+             where c.Tipo == (int)EntidadesEnum.EnCobro && ci.Origen == (int)EntidadesEnum.EnCobroTarjeta && c.Estado == 0 &&
+             c.SucursalId == psuc && c.Fecha >= pFini && c.Fecha <= pFcor
+             select new CobroPeriodo
+             {
+                 Id = ci.Id,
+                 Valor = ci.Valor,
+             }
+        ).AsEnumerable();
+        double? dt = cobst.Sum(s => s.Valor);
+        if (dt != null && dt > 0)
+        {
+            CuadreCajaItem i = new CuadreCajaItem("Ventas del periodo cobradas con tarjeta", 0, 0, (double)dt);
+            res.Add(i);
+        }
+
+        // Cobros con cheque
+        IEnumerable<CobroPeriodo> cobsq =
+            (from ci in Contexto.ComprobanteItems
+             join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+             where c.Tipo == (int)EntidadesEnum.EnCobro && ci.Origen == (int)EntidadesEnum.EnCobroCheque && c.Estado == 0 &&
+             c.SucursalId == psuc && c.Fecha >= pFini && c.Fecha <= pFcor
+             select new CobroPeriodo
+             {
+                 Id = ci.Id,
+                 Valor = ci.Valor,
+             }
+        ).AsEnumerable();
+        double? dq = cobsq.Sum(s => s.Valor);
+        if (dq != null && dq > 0)
+        {
+            CuadreCajaItem i = new CuadreCajaItem("Ventas del periodo cobradas en cheques", 0, 0, (double)dq);
+            res.Add(i);
+        }
+
+        // Cobros con deposito
+        IEnumerable<CobroPeriodo> cobsDep =
+            (from ci in Contexto.ComprobanteItems
+             join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+             where c.Tipo == (int)EntidadesEnum.EnCobro && ci.Origen == (int)EntidadesEnum.EnDeposito && c.Estado == 0 &&
+             c.SucursalId == psuc && c.Fecha >= pFini && c.Fecha <= pFcor
+             select new CobroPeriodo
+             {
+                 Id = ci.Id,
+                 Valor = ci.Valor,
+             }
+        ).AsEnumerable();
+        double? dep = cobsDep.Sum(s => s.Valor);
+        if (dep != null && dep > 0)
+        {
+            CuadreCajaItem iDeps = new CuadreCajaItem("Ventas del periodo cobradas con depositos", 0, 0, (double)dep);
+            res.Add(iDeps);
+        }
+    }
+
+    // Traer cheques postfechados ejecutados en efectivo (cambiados por ventanilla o pagos en efectivo por el cliente)
+    // (16 = EnCobro, 36 = CobroCheque, Base 1 = Ejecutado, Autorizacion 2 = Caja chica)
+    IEnumerable<CobroPeriodo> cobsc = 
+        (from ci in Contexto.ComprobanteItems
+        join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+        where c.Tipo == (int)EntidadesEnum.EnCobro && ci.Origen == (int)EntidadesEnum.EnCobroCheque && ci.Base == 1 &&
+        ci.Autorizacion == "2" && c.Estado == 0 && ci.Fraccion == pCaja &&
+        c.SucursalId == psuc && ci.Ejecucion >= pFini && ci.Ejecucion <= pFcor
+        select new CobroPeriodo
+        {
+            Id = ci.Id,
+            Valor = ci.Valor
+        }
+    ).AsEnumerable();
+    double? dc = cobsc.Sum(s => s.Valor);
+    if (dc != null && dc > 0)
+    {
+        CuadreCajaItem i = new CuadreCajaItem("Cheques de clientes cobrados en efectivo", (double)dc, 0);
+        res.Add(i);
+    }
+
+    // Traer vales de caja (31 = EnValeCaja)
+    IEnumerable<CobroPeriodo> vales =
+        (from m in Contexto.CajaMovimientos
+         join c in Contexto.Cajas on m.CajaId equals c.Id
+         where m.Tipo == (int)EntidadesEnum.EnValeCaja && m.CajaId == pCaja && m.SucursalId == psuc && m.Estado == 0 &&
+         m.Fecha >= pFini && m.Fecha <= pFcor
+         select new CobroPeriodo
+         {
+             Id = m.Id,
+             Valor = m.Valor
+         }
+        ).AsEnumerable();
+    double? dv = vales.Sum(s => s.Valor);
+    if (dv != null && dv > 0)
+    {
+        CuadreCajaItem i = new CuadreCajaItem("Vales de caja", 0, (double)dv);
+        res.Add(i);
+    }
+
+    // Traer Pago a proveedores (34 = EnPago; 31 = EnValeCaja)
+    IEnumerable<CobroPeriodo> pgsp =
+        (from ci in Contexto.ComprobanteItems
+         join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+         where c.Tipo == (int)EntidadesEnum.EnPago && ci.Origen == (int)EntidadesEnum.EnValeCaja && ci.Numero == pCaja && c.SucursalId == psuc &&
+         c.Estado == 0 && c.Fecha >= pFini && c.Fecha <= pFcor
+         select new CobroPeriodo
+         {
+             Id = ci.Id,
+             Valor = ci.Valor
+         }
+    ).AsEnumerable();
+    double? dp = pgsp.Sum(s => s.Valor);
+    if (dp != null && dp > 0)
+    {
+        CuadreCajaItem i = new CuadreCajaItem("Pagos a proveedores", 0, (double)dp);
+        res.Add(i);
+    }
+
+    // Traer Otros Pagos en efectivo (46 = EnOtroPago; 31 = EnValeCaja)
+    IEnumerable<CobroPeriodo> pgst =
+        (from ci in Contexto.ComprobanteItems
+         join c in Contexto.Comprobantes on ci.ComprobanteId equals c.Id
+         where c.Tipo == (int)EntidadesEnum.EnOtroPago && ci.Origen == (int)EntidadesEnum.EnValeCaja && ci.Numero == pCaja && c.SucursalId == psuc &&
+         c.Estado == 0 && c.Fecha >= pFini && c.Fecha <= pFcor
+         select new CobroPeriodo
+         {
+             Id = ci.Id,
+             Valor = ci.Valor
+         }
+    ).AsEnumerable();
+    double? pt = pgst.Sum(s => s.Valor);
+    if (pt != null && pt > 0)
+    {
+        CuadreCajaItem i = new CuadreCajaItem("Comprobantes de egreso", 0, (double)pt);
+        res.Add(i);
+    }
+    
+    return res;
+  }*/
 
   // Ajustes de caja
   // Crear ajuste caja

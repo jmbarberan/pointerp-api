@@ -4,6 +4,7 @@ namespace Pointerp\Controladores;
 
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
+use Pointerp\Modelos\EmpresaClaves;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Sucursales;
 use Pointerp\Modelos\Empresas;
@@ -91,23 +92,19 @@ class AjustesController extends ControllerBase  {
   public function empresaPorEstadoAction() {
     $this->view->disable();
     $est = $this->dispatcher->getParam('est');
-    $res = Empresas::find([
-        'conditions' => 'Estado = :est:',
-        'bind' => ['est' => $est]
-    ]);
-
+    $params = [];
+    if ($est != 9) {
+        $params = [
+            'conditions' => 'Estado = :est:',
+            'bind' => ['est' => $est]
+        ];
+    }
+    $res = Empresas::find($params);
     if ($res->count() > 0) {
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $this->response->setStatusCode(404, 'Not found');
-    }    
-    /*$res = [];
-    $emp = (object) [
-        'Id' => 1,
-        'Nombre' => "Softeq",
-        'Estado' => 0
-      ];
-    array_push($res, $emp);*/
+    }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
     $this->response->send();
@@ -153,6 +150,20 @@ class AjustesController extends ControllerBase  {
     $this->response->setStatusCode(200, 'Ok');
     $this->response->setContentType('text/plain', 'UTF-8');
     $this->response->setContent($deco);
+    $this->response->send();
+  }
+
+  public function empresaClavePorCIdAction() {
+    $this->view->disable();
+    $emp = $this->dispatcher->getParam('emp');
+    $cve = $this->dispatcher->getParam('cve');
+    $clave = EmpresaClaves::findFirst([
+        'conditions' => 'EmpresaId = :empId: and Clave = :clave:',
+        'bind' => ['empId' => $emp, 'clave' => $cve],
+        'order' => 'Indice'
+    ]);
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($clave));
     $this->response->send();
   }
 }

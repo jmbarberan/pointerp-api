@@ -7,6 +7,7 @@ use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Productos;
+use Pointerp\Modelos\Maestros\ProductosImagenes;
 use Pointerp\Modelos\Maestros\ProductosPrecios;
 use Pointerp\Modelos\Maestros\ProductosImposiciones;
 use Pointerp\Modelos\Inventarios\Bodegas;
@@ -645,6 +646,23 @@ class InventariosController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
+  public function imagenProductoPorIdAction() {
+    $id = $this->dispatcher->getParam('id');
+    $this->response->setStatusCode(404, 'Not found');
+
+    $img = ProductosImagenes::findFirst($id);
+    if (isset($img)) {
+      $filePath = $img->ImagenRuta;
+      if (file_exists($filePath)) {
+        $mimeType = mime_content_type($filePath);
+        $this->response->setContentType($mimeType);
+        $this->response->setContent(file_get_contents($filePath));
+        $this->response->setStatusCode(200, 'Ok');
+      }
+    }
     $this->response->send();
   }
   #endregion

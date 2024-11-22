@@ -6,6 +6,7 @@ use Phalcon\Mvc\Model;
 use Pointerp\Modelos\Modelo;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Maestros\ProductosPrecios;
+use Pointerp\Modelos\Maestros\ProductosImagenes;
 use Pointerp\Modelos\Maestros\ProductosImposiciones;
 
 class Productos extends Modelo {
@@ -35,6 +36,13 @@ class Productos extends Modelo {
       ]
     );
 
+    $this->hasMany('Id', ProductosImagenes::class, 'ProductoId',
+      [
+        'reusable' => true,
+        'alias'    => 'relImagenes'
+      ]
+    );
+
     $this->hasMany('Id', ProductosImposiciones::class, 'ProductoId',
       [
         'reusable' => true,
@@ -53,6 +61,9 @@ class Productos extends Modelo {
     }
     if ($this->relPrecios != null) {
       $res['relPrecios'] = $this->relPrecios->toArray();
+    }
+    if ($this->relImagenes != null) {
+      $res['relImagenes'] = $this->relImagenes->toArray();
     }
     if ($this->relImposiciones != null) {   
       $items = [];

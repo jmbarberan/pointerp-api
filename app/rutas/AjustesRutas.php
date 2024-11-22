@@ -38,5 +38,9 @@ class AjustesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'encabezados',
     ]);
+    $this->addGet('/empresa/{emp}/clave/{cve}', [
+      'controller' => $controlador,
+      'action'     => 'empresaClavePorCId',
+    ]);
   }
 }

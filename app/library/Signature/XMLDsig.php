@@ -151,9 +151,6 @@ class XMLDsig implements SignatureInterface
                 $signatureNode->parentNode->removeChild($signatureNode);
             }
             $data = $doc->saveXML($doc->documentElement);
-            /*$flatXmlns = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
-            $data = str_replace('<factura', '<factura ' . $flatXmlns, $data);*/
-            file_put_contents("documentoCanon.xml", $data);
         }
         $digestValue = $crypto->digest($data,$digestMethod);
         $this->domUtils->addNode($nodeReference, self::NAMESPACE,'ds:DigestValue',$digestValue);

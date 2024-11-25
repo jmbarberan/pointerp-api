@@ -1,9 +1,12 @@
 <?php
 declare(strict_types=1);
 
+use Library\Listener\PreFlightListener;
 use Phalcon\Di;
 use Phalcon\Escaper;
+use Phalcon\Events\Manager;
 use Phalcon\Flash\Direct as Flash;
+use Phalcon\Mvc\Dispatcher;
 use Phalcon\Mvc\Model\Metadata\Memory as MetaDataAdapter;
 use Phalcon\Mvc\Model\Manager as ModelsManager;
 use Phalcon\Mvc\View;
@@ -16,6 +19,10 @@ use Phalcon\Http\Request;
 use Phalcon\Db\Adapter\Pdo\Postgresql as PgConnection;
 
 $di = Di::getDefault();
+
+$di->set('preflight', function() {
+    return new PreFlightListener();
+}, true);
 
 /**
  * Shared configuration service
@@ -249,3 +256,22 @@ $di->setShared('subscripcion', function () {
     }
     return $entorno;
 });
+
+$di->setShared(
+    "dispatcher",
+    function () use ($di) {
+        /*$eventsManager = new Manager();
+        $eventsManager->attach("dispatch:beforeExecuteRoute", $di->get('preflight'));
+        $dispatcher = new Dispatcher();
+        $dispatcher->setEventsManager($eventsManager);
+        //$dispatcher->setDefaultNamespace("Pointerp\\Controladores");
+        return $dispatcher;*/
+
+        $eventsManager = new Manager();
+        $eventsManager->enablePriorities(true);
+        $eventsManager->attach("dispatch", new PreFlightListener(), 260);
+        $dispatcher = new Dispatcher();
+        $dispatcher->setEventsManager($eventsManager);
+        return $dispatcher;
+    }
+);

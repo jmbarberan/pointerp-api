@@ -229,7 +229,8 @@ class VentasController extends ControllerBase  {
         'sec' => '',
         'ven' => null,
         'msj' => 'Los datos no se pudieron procesar',
-        'num' => $datos->Numero
+        'num' => $datos->Numero,
+        'aut' => ''
       ];
       $this->response->setStatusCode(406, 'Not Acceptable');
       $datos->Fecha = str_replace('T', ' ', $datos->Fecha);
@@ -428,15 +429,27 @@ class VentasController extends ControllerBase  {
                   if ($result->respuesta == true) {
                     if (isset($ventaGuardada) && isset($result->comprobante)) {
                       $ahora = new \DateTime();
+                      $ret->aut = "{$result->comprobante->estado} - Clave de acceso: {$result->comprobante->numeroAutorizacion} | Fecha de autorizacion: {$result->comprobante->fechaAutorizacion}";
                       $ventaGuardada->CEAutorizacion = $ret->ven->CEClaveAcceso;
                       $ventaGuardada->CERespuestaMsj = $result->mensaje;
-                      $ventaGuardada->CEAutorizaFecha = $ahora->format('Y-m-d H:i:s');
-                      $ventaGuardada->CEContenido = $result->comprobante;
+                      $ventaGuardada->CERespuestaId  = '7114'; // QUEMADO: CAMBIAR A PARAMETRO SELECCIONADO DE UN COMBO 
+                      $ventaGuardada->CEAutorizaFecha = date_format(new \DateTime(), 'Y-m-d H:i:s');
+                      $ventaGuardada->CEContenido = "<autorizacion>" .
+                        "<estado>{$result->comprobante->estado}</estado>" .
+                        "<numeroAutorizacion>{$result->comprobante->numeroAutorizacion}</numeroAutorizacion>" .
+                        "<fechaAutorizacion>{$result->comprobante->fechaAutorizacion}</fechaAutorizacion>" .
+                        "<ambiente>{$result->comprobante->ambiente}</ambiente>" .
+                        "<comprobante><![CDATA[{$result->comprobante->comprobante}]]></comprobante>" .
+                        "</autorizacion>";
                     }
                   } else {
                     if (isset($ventaGuardada)) {
-                      $ventaGuardada->CERespuestaMsj = "{$result->proceso}: {$result->mensaje}";
-                      $ventaGuardada->CEContenido = $result->comprobante;
+                      $data = json_decode($result->mensaje, true);
+                      $autMensaje = $data['mensajes']['mensaje']['mensaje'] ?? 'DEVUELTA';
+                      $autInfoAdicional = $data['mensajes']['mensaje']['informacionAdicional'] ?? 'MOTIVO NO DETERMINADO';
+                      $ret->aut = "{$result->proceso} - {$autMensaje}: {$autInfoAdicional}";
+                      $ventaGuardada->CERespuestaMsj = "{$result->proceso} - {$autMensaje}: {$autInfoAdicional}";
+                      $ventaGuardada->CEContenido = $result->comprobante ?? "";
                     }
                   }
                   $ventaGuardada->update();
@@ -661,12 +674,26 @@ class VentasController extends ControllerBase  {
         $result = \ComprobantesElectronicos::autorizarFactura($ven);
         if (isset($result)) {          
           if ($result->respuesta == true) {
-            if (isset($ventaGuardada) && isset($result->comprobante)) {
-              $ven->CEContenido = $result->comprobante;
+            if (isset($result->comprobante)) {
+              $ven->CEAutorizacion = $ven->CEClaveAcceso;
+              $ven->CERespuestaMsj = $result->mensaje;
+              $ven->CERespuestaId  = '7114'; // QUEMADO: CAMBIAR A PARAMETRO SELECCIONADO DE UN COMBO 
+              $ven->CEAutorizaFecha = date_format(new \DateTime(), 'Y-m-d H:i:s');
+              $ven->CEContenido = "<autorizacion>" .
+                "<estado>{$result->comprobante->estado}</estado>" .
+                "<numeroAutorizacion>{$result->comprobante->numeroAutorizacion}</numeroAutorizacion>" .
+                "<fechaAutorizacion>{$result->comprobante->fechaAutorizacion}</fechaAutorizacion>" .
+                "<ambiente>{$result->comprobante->ambiente}</ambiente>" .
+                "<comprobante><![CDATA[{$result->comprobante->comprobante}]]></comprobante>" .
+                "</autorizacion>";  
             }
           } else {
-            if (isset($ventaGuardada)) {
-              $ven->CERespuestaMsj = $result->mensaje;
+            if (isset($ven)) {
+              $data = json_decode($result->mensaje, true);
+              $autMensaje = $data['mensajes']['mensaje']['mensaje'] ?? 'DEVUELTA';
+              $autInfoAdicional = $data['mensajes']['mensaje']['informacionAdicional'] ?? 'MOTIVO NO DETERMINADO';
+              $ven->CERespuestaMsj = "{$result->proceso} - {$autMensaje}: {$autInfoAdicional}";
+              $ven->CEContenido = $result->comprobante ?? "";
             }
           }
           $ven->update();

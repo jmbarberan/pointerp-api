@@ -45,27 +45,28 @@ class ComprobantesElectronicos {
     $xmlFactura = self::crearXmlFactura($comprobante);
     if (isset($xmlFactura)) {
       $type = 'http://uri.etsi.org/01903/v1.3.2#';
-      $crypto = new OpenSSL(BASE_PATH . '/certs/' . self::$certificado, self::$password, "PKCS12");
+      $crypto = new OpenSSL(BASE_PATH . '\\certs\\' . self::$certificado, self::$password, "PKCS12");
       $xmlsec = new XMLSecLibs();
       $options = ['timezone' => 'America/Guayaquil'];
       $xmlsec->setDigestMethod('http://www.w3.org/2001/04/xmlenc#sha256');
       $xmlsec->setSignatureMethod('http://www.w3.org/2000/09/xmldsig#rsa-sha1');
       $xmlFirmado = $xmlsec->sign($xmlFactura, $type, $crypto, $options);
       if (isset($xmlFirmado)) {
+        $ret->proceso = 'enviar';
         $respEnvio = self::enviar($xmlFirmado, $ambiente);
         if ($respEnvio->completo) {
-          $ret->proceso = 'enviar';
           sleep(2);
+          $ret->proceso = 'verificar';
           $resVerificar = self::verificar($comprobante->CEClaveAcceso, $ambiente);
           if ($resVerificar->completo) {
-            $ret->proceso = 'verificar';
             $ret->respuesta = true;
+            $ret->mensaje = 'AUTORIZADO';
             $ret->comprobante = $resVerificar->respuesta;
           } else {
-            $ret->mensaje = implode(', ', $resVerificar->respuesta);
+            $ret->mensaje = json_encode(', ', $resVerificar->respuesta);
           }
         } else {
-          $ret->mensaje = implode(', ', $respEnvio->respuesta);
+          $ret->mensaje = json_encode($respEnvio->respuesta);
         }
       }
     }
@@ -143,15 +144,15 @@ class ComprobantesElectronicos {
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('codDoc', $tipoDatos->tipoDocumento);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('estab', $comprobante->relSucursal->Descripcion);
+      $cbc = $xml->createElement('estab', $comprobante->relSucursal->Codigo);
       $cbc = $infoTributaria->appendChild($cbc);
-      $cbc = $xml->createElement('ptoEmi', $comprobante->relSucursal->Codigo);
+      $cbc = $xml->createElement('ptoEmi', $comprobante->relSucursal->Descripcion);
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('secuencial', str_pad(trim($comprobante->CERespuestaTipo), 9, "0", STR_PAD_LEFT));
       $cbc = $infoTributaria->appendChild($cbc);
       $cbc = $xml->createElement('dirMatriz', $comprobante->relSucursal->Direccion);
       $cbc = $infoTributaria->appendChild($cbc);
-      if (isset($paramFaEmpresa->Denominacion)) {
+      if (isset($paramFaEmpresa->Denominacion) && trim($paramFaEmpresa->Denominacion) != '') {
         $cbc = $xml->createElement('contribuyenteRimpe', $paramFaEmpresa->Denominacion);
         $cbc = $infoTributaria->appendChild($cbc);
       }
@@ -321,7 +322,7 @@ class ComprobantesElectronicos {
         $ret->respuesta = null;
       } else {
         $ret->completo = false;
-        $ret->respuesta = $responseXml->mensajes;
+        $ret->respuesta = $responseXml->comprobantes->comprobante;
       }
       return $ret;
     } catch (SoapFault $fault) {
@@ -346,10 +347,10 @@ class ComprobantesElectronicos {
       $ret->mensaje = $responseXml->estado;
       if ($responseXml->estado == 'AUTORIZADO') {
         $ret->completo = true;
-        $ret->respuesta = $response->RespuestaAutorizacionComprobante->autorizaciones;
+        $ret->respuesta = $responseXml;
       } else {
         $ret->completo = false;
-        $ret->respuesta = $responseXml->mensajes;
+        $ret->respuesta = $responseXml->mensajes->mensaje;
       }
       return $ret;
     } catch (SoapFault $e) {

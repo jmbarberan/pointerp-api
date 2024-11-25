@@ -4,6 +4,9 @@ use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\Maestros\Registros;
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+use Dompdf\Dompdf;
 
 require(APP_PATH . '/library/CryptoToolKit/CryptoToolKitInterface.php');
 require(APP_PATH . '/library/CryptoToolKit/OpenSSL.php');
@@ -357,6 +360,52 @@ class ComprobantesElectronicos {
       $ret->mensaje = $e->getMessage();
       return $ret;
     }
+  }
+
+  public static function enviarCorreo($venta, $config) {
+    $ret = (Object) [
+      "completo" => false,
+      "mensaje" => "Operacion incompleta",
+      "data" => null
+    ];
+    
+    $mail = new PHPMailer(true);
+    try {
+      $mail->isSMTP();
+      $mail->Host       = 'smtp.gmail.com';
+      $mail->SMTPAuth   = true;
+      $mail->Username   = $config->Email;
+      $mail->Password   = $config->Password;
+      $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+      $mail->Port       = 587;
+      $mail->setFrom($config->Email, $config->Empresa);
+      $mail->addAddress($venta->relCliente->Email, $venta->relCliente->Nombres);
+      $mail->isHTML(true);
+      $mail->Subject = 'Comprobante Electronico emitido';
+      $mail->Body    = "<h3>Estimado(a), {$venta->relCliente->Nombres}</h3>" .
+                       "<p>A continuación adjuntamos el Comprobante electrónico en formato XML y su interpretación en formato PDF de su FACTURA ELECTRÓNICA que hemos generado.</p>" .
+                       "<p>Saludos cordiales</p>". ;
+      $mail->AltBody = 'A continuación adjuntamos el Comprobante electrónico en formato XML y su interpretación en formato PDF de su FACTURA ELECTRÓNICA que hemos generado.';
+
+      $nombreXml = "factura-{$venta->CERespuestaTipo}.xml";
+      $mail->addStringAttachment($venta->CEContenido, $nombreXml);
+
+      $dompdf = new Dompdf();
+      $htmlContent = '<h1>Este es el contenido del PDF</h1><p>Generado desde un div HTML.</p>'; // GENERAR PDF DE HTML
+      $dompdf->loadHtml($htmlContent);
+      $dompdf->setPaper('A4', 'portrait');
+      $dompdf->render();
+      $pdfOutput = $dompdf->output();
+      $nombrePdf = "factura-{$venta->CERespuestaTipo}.pdf";
+      $mail->addStringAttachment($pdfOutput, $nombrePdf);
+
+      $mail->send();
+      $ret->completo = true;
+      $ret->mensaje = "Correo enviado exitosamente";
+    } catch (Exception $ex) {
+      $ret->mensaje = "Error al enviar correo: {$mail->ErrorInfo}";
+    }
+    return $ret;
   }
 }
 

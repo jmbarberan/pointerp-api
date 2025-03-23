@@ -2,6 +2,7 @@
 
 namespace Pointerp\Controladores;
 
+use DateTime;
 use Exception;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
@@ -397,11 +398,22 @@ class VentasController extends ControllerBase  {
         // Crear factura nueva
         $vendoble = false;
         try {
-          $fechaComparar = str_replace("T", " ", $datos->Fecha);
-          $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
-            where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";
+          //$fechaComparar = str_replace("T", " ", $datos->Fecha);
+          $fechaComparar = (new DateTime($datos->Fecha))->format('Y-m-d H:i:s');
+          $cmd = "SELECT Id FROM Pointerp\Modelos\Ventas\Ventas 
+            WHERE Tipo = :tipo: 
+            AND SucursalId = :sucursalId: 
+            AND Fecha = :fecha:";
           $qry = new Query($cmd, Di::getDefault());
-          $rws = $qry->execute();
+          $rws = $qry->execute([
+              'tipo' => $datos->Tipo,
+              'sucursalId' => $datos->SucursalId,
+              'fecha' => $fechaComparar
+          ]);
+          /*$cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
+            where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";*/
+          /*$qry = new Query($cmd, Di::getDefault());
+          $rws = $qry->execute();*/
           $vendoble = $rws->count() > 0;
         }
         catch(Exception $ex) {
@@ -513,11 +525,22 @@ class VentasController extends ControllerBase  {
     
     $vendoble = false;
     try {
-      $fechaComparar = str_replace("T", " ", $datos->Fecha);
+      /*$fechaComparar = str_replace("T", " ", $datos->Fecha);
       $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
         where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";
       $qry = new Query($cmd, Di::getDefault());
-      $rws = $qry->execute();
+      $rws = $qry->execute();*/
+      $fechaComparar = (new DateTime($datos->Fecha))->format('Y-m-d H:i:s');
+      $cmd = "SELECT Id FROM Pointerp\Modelos\Ventas\Ventas 
+        WHERE Tipo = :tipo: 
+        AND SucursalId = :sucursalId: 
+        AND Fecha = :fecha:";
+      $qry = new Query($cmd, Di::getDefault());
+      $rws = $qry->execute([
+          'tipo' => $datos->Tipo,
+          'sucursalId' => $datos->SucursalId,
+          'fecha' => $fechaComparar
+      ]);
       $vendoble = $rws->count() > 0;
     }
     catch(Exception $ex) {
@@ -537,7 +560,7 @@ class VentasController extends ControllerBase  {
         $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
         $cobro = new Comprobantes();
         $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
-        $cobro->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
+        $cobro->Fecha = date_format(new DateTime(),"Y-m-d H:i:s");
         $cobro->Total = $cobrado;
         $cobro->SucursalId = $datos->SucursalId;
         $cobro->Especie = 0;
@@ -562,7 +585,7 @@ class VentasController extends ControllerBase  {
             $cobitem = new ComprobanteItems();
             $cobitem->ComprobanteId = $cobro->Id;
             $cobitem->Numero = $caja; // id de la caja
-            $cobitem->Fecha = date_format(new \DateTime(),"Y-m-d H:i:s");
+            $cobitem->Fecha = date_format(new DateTime(),"Y-m-d H:i:s");
             $cobitem->Cuenta = " ";
             $cobitem->Autorizacion = " ";
             $cobitem->Nombres = " ";
@@ -663,6 +686,7 @@ class VentasController extends ControllerBase  {
 
   public function ventaAutorizarAction() {
     $id = $this->dispatcher->getParam('id');
+    $id = $this->dispatcher->getParam('sendEmail',  false);
     $ven = Ventas::findFirstById($id);
     if ($ven != false) {
       require_once APP_PATH . '/library/ComprobantesElectronicos.php';
@@ -677,15 +701,18 @@ class VentasController extends ControllerBase  {
             if (isset($result->comprobante)) {
               $ven->CEAutorizacion = $ven->CEClaveAcceso;
               $ven->CERespuestaMsj = $result->mensaje;
-              $ven->CERespuestaId  = '7114'; // QUEMADO: CAMBIAR A PARAMETRO SELECCIONADO DE UN COMBO 
-              $ven->CEAutorizaFecha = date_format(new \DateTime(), 'Y-m-d H:i:s');
+              $ven->CEAutorizaFecha = date_format(new DateTime(), 'Y-m-d H:i:s');
               $ven->CEContenido = "<autorizacion>" .
                 "<estado>{$result->comprobante->estado}</estado>" .
                 "<numeroAutorizacion>{$result->comprobante->numeroAutorizacion}</numeroAutorizacion>" .
                 "<fechaAutorizacion>{$result->comprobante->fechaAutorizacion}</fechaAutorizacion>" .
                 "<ambiente>{$result->comprobante->ambiente}</ambiente>" .
                 "<comprobante><![CDATA[{$result->comprobante->comprobante}]]></comprobante>" .
-                "</autorizacion>";  
+                "</autorizacion>";
+              if ($ven->update()) {
+                $fc = new FirmaElectronicaController();
+                $fc->enviarComprobantePorEmail($ven->Id);
+              }
             }
           } else {
             if (isset($ven)) {

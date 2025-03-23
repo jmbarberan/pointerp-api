@@ -2,22 +2,22 @@
     "name": "pointerp/pointerp-api",
       "description": "Api de servicios de la aplicacion pointerp",
       "authors": [
-          {
-              "name": "Martin Barberan",
-              "email": "jmbarberan@gmail.com"
-          }
+        {
+            "name": "Martin Barberan",
+            "email": "jmbarberan@gmail.com"
+        }
       ],
     "require": {
-      "php": "^7.3.3",
-      "ext-psr": "*",
-      "ext-mbstring": "*",
-      "ext-json": "*",
-      "ext-curl": "*",
-      "ext-gettext": "*",
-      "phalcon/cphalcon": "^3.4",
-      "ext-phalcon": "*",
-        "phpmailer/phpmailer": "^6.9",
-        "dompdf/dompdf": "^3.0"
+		"php": "^7.3.3",
+		"ext-psr": "*",
+		"ext-mbstring": "*",
+		"ext-json": "*",
+		"ext-curl": "*",
+		"ext-gettext": "*",
+		"phalcon/cphalcon": "^3.4",
+		"ext-phalcon": "*",
+		"phpmailer/phpmailer": "^6.9",
+        "tecnickcom/tcpdf": "^6.8"
     },
     "require-dev": {
         "phalcon/ide-stubs": "^4.1"

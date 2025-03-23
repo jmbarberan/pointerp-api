@@ -90,7 +90,7 @@ class SubscripcionesController extends ControllerBase  {
           #region html del correo
           $htmlCorreo = '<html>';   
           $htmlCorreo .= '<head>';
-          $htmlCorreo .= '  <title>Recordatorio de cumpleaños para Agosto</title>';
+          $htmlCorreo .= '  <title>Solicitud de reseteo de contraseña</title>';
           $htmlCorreo .= '  <style>html,body { padding: 0; margin:0; }</style>';
           $htmlCorreo .= '</head>';
           $htmlCorreo .= '<body>';
@@ -200,11 +200,11 @@ class SubscripcionesController extends ControllerBase  {
       'msj' => 'No se pudo actualizar su codigo de acceso'
     ];
     $tk = Tickets::findFirst([
-      'conditions' => "token = '" . $datos->token . "'"
+      'conditions' => "token = '{$datos->token}'"
     ]);
     if ($tk != null) {
       $sub = Subscripciones::findFirst([
-        'conditions' => "clave = '" . $datos->clave . "' and id != " . $tk->subscripcion_id
+        'conditions' => "clave = '{$datos->clave}' and id != {$tk->subscripcion_id}"
       ]);
       if ($sub != null) {
         $ret->res = true;

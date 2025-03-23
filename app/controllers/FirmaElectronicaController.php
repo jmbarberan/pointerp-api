@@ -103,8 +103,8 @@ class FirmaElectronicaController extends ControllerBase  {
         $pdf->SetTitle('Invoice');
         $pdf->SetSubject('Invoice');
         $pdf->SetKeywords('Invoice');
-        $pdf->setHeaderFont(Array(PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN));
-        $pdf->setFooterFont(Array(PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA));
+        $pdf->setHeaderFont([ PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN ]);
+        $pdf->setFooterFont([ PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA ]);
         $pdf->setPrintHeader(false);
         $pdf->setPrintFooter(false);
         $pdf->SetMargins(PDF_MARGIN_LEFT, 10, PDF_MARGIN_RIGHT);

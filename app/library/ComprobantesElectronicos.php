@@ -6,7 +6,7 @@ use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\Maestros\Registros;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-use Dompdf\Dompdf;
+//use Dompdf\Dompdf;
 
 require(APP_PATH . '/library/CryptoToolKit/CryptoToolKitInterface.php');
 require(APP_PATH . '/library/CryptoToolKit/OpenSSL.php');
@@ -384,13 +384,13 @@ class ComprobantesElectronicos {
       $mail->Subject = 'Comprobante Electronico emitido';
       $mail->Body    = "<h3>Estimado(a), {$venta->relCliente->Nombres}</h3>" .
                        "<p>A continuación adjuntamos el Comprobante electrónico en formato XML y su interpretación en formato PDF de su FACTURA ELECTRÓNICA que hemos generado.</p>" .
-                       "<p>Saludos cordiales</p>". ;
+                       "<p>Saludos cordiales</p>";
       $mail->AltBody = 'A continuación adjuntamos el Comprobante electrónico en formato XML y su interpretación en formato PDF de su FACTURA ELECTRÓNICA que hemos generado.';
 
       $nombreXml = "factura-{$venta->CERespuestaTipo}.xml";
       $mail->addStringAttachment($venta->CEContenido, $nombreXml);
 
-      $dompdf = new Dompdf();
+      /*$dompdf = new Dompdf();
       $htmlContent = '<h1>Este es el contenido del PDF</h1><p>Generado desde un div HTML.</p>'; // GENERAR PDF DE HTML
       $dompdf->loadHtml($htmlContent);
       $dompdf->setPaper('A4', 'portrait');
@@ -399,7 +399,7 @@ class ComprobantesElectronicos {
       $nombrePdf = "factura-{$venta->CERespuestaTipo}.pdf";
       $mail->addStringAttachment($pdfOutput, $nombrePdf);
 
-      $mail->send();
+      $mail->send();*/
       $ret->completo = true;
       $ret->mensaje = "Correo enviado exitosamente";
     } catch (Exception $ex) {

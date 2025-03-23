@@ -51,6 +51,10 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaVerificar',
     ]);
+    $this->addGet('/comprobantes/{id}/enviar-correo', [
+      'controller' => 'FirmaElectronica',
+      'action'     => 'enviarComprobantePorEmail',
+    ]);
     $this->addPost('/comprobantes/guardar', [
       'controller' => $controlador,
       'action'     => 'ventaGuardar',

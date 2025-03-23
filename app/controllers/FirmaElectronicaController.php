@@ -28,7 +28,6 @@ class FirmaElectronicaController extends ControllerBase  {
         $res = [];
         $this->response->setStatusCode(404, 'Not found');
     }
-    
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($res));
     $this->response->send();
@@ -36,11 +35,16 @@ class FirmaElectronicaController extends ControllerBase  {
 
   public function enviarComprobantePorEmail($ventaId) {
     $valido = false;
-    $error = "";
     $venta = Ventas::findFirst($ventaId);
     $di = Di::getDefault();
     $config = $di->get('config');
     $subscripcion = $config->entorno->subscripcion;
+    $ret = (object) [
+      'res' => false,
+      'cid' => 0,
+      'msj' => 'Los datos no se pudieron procesar',
+      'det' => '',
+    ];
     if (isset($venta)) {      
       $clienteData = $venta->relCliente;
       if (!isset($clienteData)) {
@@ -59,116 +63,118 @@ class FirmaElectronicaController extends ControllerBase  {
           "<p>A continuación adjuntamos el Comprobante electrónico en formato XML y su interpretación en formato PDF de su FACTURA ELECTRÓNICO(A) que hemos generado por su compra en nuestro establecimiento</p>"; // Quemado
         $xmlString = $venta->CEContenido;
         // cargar de plantilla reemplazar valores
-        $htmlParaPdf = '<h1>Factura</h1><p>Este es un contenido para el PDF de impresión.</p>'; // viene de la plantilla
+        //$htmlParaPdf = '<h1>Factura</h1><p>Este es un contenido para el PDF de impresión.</p>'; // viene de la plantilla
       } else {
-        $error = "El cliente no tiene correo registrado";
+        $ret->msj = "El cliente no tiene correo registrado";
+        $this->response->setStatusCode(402, 'Not Acceptable');
       }
     } else {
-      $error = "El numero de comprobante no existe";
+      $ret->msj = "El numero de comprobante no existe";
+      $this->response->setStatusCode(404, 'Not found');
     }
     
     if ($valido) {
       $mail = new PHPMailer(true);
       try {
-          // Configuración de Gmail
-          $mail->isSMTP();
-          $mail->Host = $subscripcionData->email_host;
-          $mail->SMTPAuth = true;
-          //$mail->SMTPSecure = "tls";
-          $mail->Username = $subscripcionData->email_user;
-          $mail->Password = $subscripcionData->email_pass;
-          /*if ($subscripcionData->email_tls == "1") {
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-          }*/
-          $mail->Port = $subscripcionData->email_port;
+        // Configuración de Gmail
+        $mail->isSMTP();
+        $mail->Host = $subscripcionData->email_host;
+        $mail->SMTPAuth = true;
+        //$mail->SMTPSecure = "tls";
+        $mail->Username = $subscripcionData->email_user;
+        $mail->Password = $subscripcionData->email_pass;
+        /*if ($subscripcionData->email_tls == "1") {
+          $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        }*/
+        $mail->Port = $subscripcionData->email_port;
 
-          // Configuración del correo
-          $mail->setFrom($subscripcionData->email_dir, $empresa->NombreComercial); // correo de la empresa
-          $mail->addAddress($destinatario); // Correo del cliente
-          $mail->isHTML(true); // Activar contenido HTML
-          $mail->Subject = $asunto;
-          $mail->Body = $contenidoHtml;
+        // Configuración del correo
+        $mail->setFrom($subscripcionData->email_dir, $empresa->NombreComercial);
+        $mail->addAddress($destinatario);
+        $mail->isHTML(true);
+        $mail->Subject = $asunto;
+        $mail->Body = $contenidoHtml;
 
-          // Adjuntar archivo XML
-          $mail->addStringAttachment($xmlString, 'factura.xml', 'base64', 'application/xml');
+        // Adjuntar archivo XML
+        $mail->addStringAttachment($xmlString, 'comprobante.xml', 'base64', 'application/xml');
 
-          // Crear pdf RIDE
-          $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
-					$pdf->SetTitle('Invoice');
-					$pdf->SetSubject('Invoice');
-					$pdf->SetKeywords('Invoice');
-					$pdf->setHeaderFont(Array(PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN));
-					$pdf->setFooterFont(Array(PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA));
-					$pdf->setPrintHeader(false);
-					$pdf->setPrintFooter(false);
-					$pdf->SetMargins(PDF_MARGIN_LEFT, 10, PDF_MARGIN_RIGHT);
-					$pdf->SetHeaderMargin(PDF_MARGIN_HEADER);
-					$pdf->SetFooterMargin(PDF_MARGIN_FOOTER);
-					$pdf->SetAutoPageBreak(true, PDF_MARGIN_BOTTOM);
-					$pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
-					$pdf->SetFont('times', '', 12);
-					$pdf->AddPage();
+        // Crear pdf RIDE
+        $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+        $pdf->SetTitle('Invoice');
+        $pdf->SetSubject('Invoice');
+        $pdf->SetKeywords('Invoice');
+        $pdf->setHeaderFont(Array(PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN));
+        $pdf->setFooterFont(Array(PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA));
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetMargins(PDF_MARGIN_LEFT, 10, PDF_MARGIN_RIGHT);
+        $pdf->SetHeaderMargin(PDF_MARGIN_HEADER);
+        $pdf->SetFooterMargin(PDF_MARGIN_FOOTER);
+        $pdf->SetAutoPageBreak(true, PDF_MARGIN_BOTTOM);
+        $pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
+        $pdf->SetFont('times', '', 12);
+        $pdf->AddPage();
 
 
-					$type = 'C128';
-					$barcodeFile = "barcode{$venta->CEClaveAcceso}.png";
-					$bc = new TCPDFBarcode($venta->CEClaveAcceso, $type);
-					$barcodePNG = $bc->getBarcodePngData(2, 60, array(0,0,0));
-					$pathPng = __DIR__ . DIRECTORY_SEPARATOR . $barcodeFile;
-					if ($barcodePNG !== false) {
-							file_put_contents($pathPng, $barcodePNG);
-					}
+        $type = 'C128';
+        $barcodeFile = "barcode{$venta->CEClaveAcceso}.png";
+        $bc = new TCPDFBarcode($venta->CEClaveAcceso, $type);
+        $barcodePNG = $bc->getBarcodePngData(2, 60, array(0,0,0));
+        $pathPng = __DIR__ . DIRECTORY_SEPARATOR . $barcodeFile;
+        if ($barcodePNG !== false) {
+            file_put_contents($pathPng, $barcodePNG);
+        }
 
-					
-          $logoStyle = $subscripcionData->logo_style;
-          $logoFile = $subscripcionData->logo_file;
-					$empObligadoContabilidad = $empresa->ObligadoContabilidad > 0 ? "SI" : "NO";
+        
+        $logoStyle = $subscripcionData->logo_style;
+        $logoFile = $subscripcionData->logo_file;
+        $empObligadoContabilidad = $empresa->ObligadoContabilidad > 0 ? "SI" : "NO";
 
-          $total = $venta->Subtotal + $venta->Subtotal0 + $venta->Impuestos;
-          $total = number_format($venta->Total, 2, ".", ",");
-          $sucursal = $venta->relSucursal;
-					if (!isset($sucursal)) {
-						$sucursal = Sucursales::findFirst($venta->SucursalId);
-					}
-					$secuencial = "{$sucursal->Codigo}-{$sucursal->Descripcion}-{$venta->Numero}";
-					$ambiente = "Produccion";
-					$oAmbiente = Registros::findFirst([
-						"conditions" => "Id = {$empresa->TipoAmbiente}"
-					]);
-					if (isset($oAmbiente)) {	
-						$ambiente = $oAmbiente->Denonimacion;
-					}
-          $regimen = "";
-					$oRegimen = EmpresaParametros::findFirst([
-						"conditions" => 
-							"EmpresaId = {$empresa->Id} and 
-							Tipo = 1 and
-							Referencia = 11 and
-							Estado = 0"
-					]);
-					if (isset($oRegimen)) {
-						$regimen = $oRegimen->Denonimacion;
-					}
-          $formaPago = "Sin utlizacion del sistema financiero";
-					$oFormaPago = Registros::findFirst([
-						"conditions" => "Id = {$venta->CERespuestaId}"
-					]);
-					if (isset($oFormaPago)) {	
-						$formaPago = $oFormaPago->Denonimacion;
-					}
+        $total = $venta->Subtotal + $venta->Subtotal0 + $venta->Impuestos;
+        $total = number_format($venta->Total, 2, ".", ",");
+        $sucursal = $venta->relSucursal;
+        if (!isset($sucursal)) {
+          $sucursal = Sucursales::findFirst($venta->SucursalId);
+        }
+        $secuencial = "{$sucursal->Codigo}-{$sucursal->Descripcion}-{$venta->Numero}";
+        $ambiente = "Produccion";
+        $oAmbiente = Registros::findFirst([
+          "conditions" => "Id = {$empresa->TipoAmbiente}"
+        ]);
+        if (isset($oAmbiente)) {	
+          $ambiente = $oAmbiente->Denonimacion;
+        }
+        $regimen = "";
+        $oRegimen = EmpresaParametros::findFirst([
+          "conditions" => 
+            "EmpresaId = {$empresa->Id} and 
+            Tipo = 1 and
+            Referencia = 11 and
+            Estado = 0"
+        ]);
+        if (isset($oRegimen)) {
+          $regimen = $oRegimen->Denonimacion;
+        }
+        $formaPago = "Sin utlizacion del sistema financiero";
+        $oFormaPago = Registros::findFirst([
+          "conditions" => "Id = {$venta->CERespuestaId}"
+        ]);
+        if (isset($oFormaPago)) {	
+          $formaPago = $oFormaPago->Denonimacion;
+        }
 
-          $htmlItems = "";
-          foreach ($venta->relDetalles as $detalle) {
-            $htmlItems .= "<tr class=\"item\">
-              <td>{$detalle->relProducto->Codigo}</td>
-              <td class=\"descripcion-producto\">{$detalle->relProducto->Nombre}</td>
-              <td class=\"valor\">{$detalle->Cantidad}</td>
-              <td class=\"valor\">{$detalle->Precio}</td>
-              <td class=\"valor\">0.00</td>
-              <td class=\"valor\">{$detalle->Total}</td>
-            </tr>"."\n";
-          }
-          $tbl = <<<EOD
+        $htmlItems = "";
+        foreach ($venta->relDetalles as $detalle) {
+          $htmlItems .= "<tr class=\"item\">
+            <td>{$detalle->relProducto->Codigo}</td>
+            <td class=\"descripcion-producto\">{$detalle->relProducto->Nombre}</td>
+            <td class=\"valor\">{$detalle->Cantidad}</td>
+            <td class=\"valor\">{$detalle->Precio}</td>
+            <td class=\"valor\">0.00</td>
+            <td class=\"valor\">{$detalle->Total}</td>
+          </tr>"."\n";
+        }
+        $tbl = <<<EOD
 <!DOCTYPE html>
 <html lang="es">
 	<head>
@@ -398,23 +404,27 @@ class FirmaElectronicaController extends ControllerBase  {
 		</div>
 	</body>
 </html>
-EOD;
-
-          $pdf->writeHTML($tbl, true, false, false, false, '');
-
-          $pdfOutput = $pdf->Output('filename.pdf', 'S');
-          // Adjuntar el PDF generado
-          $mail->addStringAttachment($pdfOutput, 'factura.pdf', 'base64', 'application/pdf');
-
-          // Enviar correo
-          if ($mail->send()) {
-            return "";
-          } else {
-            return "Error al enviar el correo: {$mail->ErrorInfo}";
-          }
+EOD; // end of html
+        $pdf->writeHTML($tbl, true, false, false, false, '');
+        $pdfOutput = $pdf->Output('comprobante.pdf', 'S');
+        $mail->addStringAttachment($pdfOutput, 'comprobante.pdf', 'base64', 'application/pdf');
+        if ($mail->send()) {
+          $ret->res = true;
+          $ret->msj = "Correo enviado con exito";
+          $this->response->setStatusCode(200, 'Ok');
+        } else {
+          $ret->msj = "Se produjo un error al enviar el correo";
+          $ret->det = $mail->ErrorInfo;
+          $this->response->setStatusCode(500, 'Ok');
+        }
       } catch (Exception $e) {
-          return "Error al enviar el correo: {$e->getMessage()}";
+        $ret->msj = "Se produjo un error al generar el correo";
+        $ret->det = $e->getMessage();
+        $this->response->setStatusCode(500, 'Not found');
       }
     }
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
   }
 }  

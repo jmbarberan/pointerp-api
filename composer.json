@@ -17,7 +17,7 @@
 		"phalcon/cphalcon": "^3.4",
 		"ext-phalcon": "*",
 		"phpmailer/phpmailer": "^6.9",
-        "tecnickcom/tcpdf": "^6.8"
+    "tecnickcom/tcpdf": "^6.8"
     },
     "require-dev": {
         "phalcon/ide-stubs": "^4.1"

@@ -273,6 +273,7 @@ class MaestrosController extends ControllerBase  {
       $newcli->Representante = $datos->Representante;
       $newcli->Direccion = $datos->Direccion;
       $newcli->Telefonos = $datos->Telefonos;
+      $newcli->Email = $datos->Email;
       $newcli->Ciudad = $datos->Ciudad;
       $newcli->CiudadId = $datos->CiudadId;
       $newcli->Referencias = $datos->Referencias ?? '';

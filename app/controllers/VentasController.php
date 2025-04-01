@@ -8,6 +8,7 @@ use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Inventarios\Kardex;
 use Pointerp\Modelos\Maestros\Impuestos;
+use Pointerp\Modelos\Maestros\ProductosImposiciones;
 use Pointerp\Modelos\Ventas\CajaMovimientos;
 use Pointerp\Modelos\Ventas\Cajas;
 use Pointerp\Modelos\Ventas\Ventas;
@@ -218,11 +219,15 @@ class VentasController extends ControllerBase  {
     $this->response->send();
   }
 
+
   public function ventaGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
       $generarCA = $this->request->getQuery('generarCA', null, false);
       $autorizar = $this->request->getQuery('autorizar', null, false);
+      $enviar = $this->request->getQuery('enviar', null, false);
+      $autorizar = $autorizar === 'true';
+      $enviar = $enviar === 'true';
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
@@ -335,30 +340,40 @@ class VentasController extends ControllerBase  {
               }
             }
             if ($datos->Tipo == FACTURA) {
-              foreach ($mi->relProducto->relImposiciones as $imps)
-              {
-                $valor = 0;
-                $porcentaje = 0;
-                if (isset($imps->relImpuesto))
+              $impsItem = []; 
+              if (isset($mi->relProducto->relImposiciones)) {
+                $impsItem = $mi->relProducto->relImposiciones;
+              } else {
+                $impsItem = ProductosImposiciones::find([
+                  "conditions" => "ProductoId = {$mi->ProductoId}"
+                ]);
+              }
+              if (count($impsItem) > 0) {
+                foreach ($mi->relProducto->relImposiciones as $imps)
                 {
-                  $porcentaje = $imps->relImpuesto->Porcentaje;
-                  $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
-                }
-                else
-                {
-                  $impuesto = Impuestos::FindById($imps->ImpuestoId);
-                  if (isset($impuesto))
-                    $porcentaje = $impuesto->Porcentaje;
+                  $valor = 0;
+                  $porcentaje = 0;
+                  if (isset($imps->relImpuesto))
+                  {
+                    $porcentaje = $imps->relImpuesto->Porcentaje;
                     $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
-                }
+                  }
+                  else
+                  {
+                    $impuesto = Impuestos::FindById($imps->ImpuestoId);
+                    if (isset($impuesto))
+                      $porcentaje = $impuesto->Porcentaje;
+                      $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                  }
 
-                if ($valor > 0) {
-                  $vimp = new VentasImpuestos();
-                  $vimp->ImpuestoId = $imps->ImpuestoId;
-                  $vimp->Porcentaje = $porcentaje;
-                  $vimp->Valor = round($valor, 2);
-                  $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
-                  array_push($datos->relImpuestos, $vimp);
+                  if ($valor > 0) {
+                    $vimp = new VentasImpuestos();
+                    $vimp->ImpuestoId = $imps->ImpuestoId;
+                    $vimp->Porcentaje = $porcentaje;
+                    $vimp->Valor = round($valor, 2);
+                    $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                    array_push($datos->relImpuestos, $vimp);
+                  }
                 }
               }
             }
@@ -397,7 +412,7 @@ class VentasController extends ControllerBase  {
       } else {
         // Crear factura nueva
         $vendoble = false;
-        try {
+        /*try {
           //$fechaComparar = str_replace("T", " ", $datos->Fecha);
           $fechaComparar = (new DateTime($datos->Fecha))->format('Y-m-d H:i:s');
           $cmd = "SELECT Id FROM Pointerp\Modelos\Ventas\Ventas 
@@ -410,15 +425,11 @@ class VentasController extends ControllerBase  {
               'sucursalId' => $datos->SucursalId,
               'fecha' => $fechaComparar
           ]);
-          /*$cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
-            where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";*/
-          /*$qry = new Query($cmd, Di::getDefault());
-          $rws = $qry->execute();*/
           $vendoble = $rws->count() > 0;
         }
         catch(Exception $ex) {
           $ret->msj = $ex;
-        }
+        }*/
 
         if (!$vendoble) {
           if ($generarCA && $datos->Tipo == 11) {
@@ -426,26 +437,30 @@ class VentasController extends ControllerBase  {
             $datos->CEClaveAcceso = $res->clave;
             $datos->CERespuestaTipo = $res->secuencial;
           }
-          $ret = $this->guardarVentaNueva($datos, 0, false);
-          if ($ret->res) {
+          $respVta = $this->guardarVentaNueva($datos, 0, false);
+          $ret->num = $respVta->ven->Numero;
+          $ret->ven = $respVta->ven;
+          $ret->cid = $respVta->ven->Id;
+          $ret->msj = "Factura guardada exitosamente";
+          if ($respVta->res) {
             if ($autorizar) {
               require_once APP_PATH . '/library/ComprobantesElectronicos.php';
               try {
                 $paramCert = EmpresaParametros::findFirst([
-                  'conditions' => "Tipo = 19 AND EmpresaId = {$ret->ven->relCliente->EmpresaId}"
+                  'conditions' => "Tipo = 19 AND EmpresaId = {$respVta->ven->relCliente->EmpresaId}"
                 ]);
                 \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
-                $result = \ComprobantesElectronicos::autorizarFactura($ret->ven);
+                $result = \ComprobantesElectronicos::autorizarFactura($respVta->ven);
                 if (isset($result)) {
-                  $ventaGuardada = Ventas::findFirstById($ret->ven->Id);
+                  $ventaGuardada = Ventas::findFirstById($respVta->ven->Id);
                   if ($result->respuesta == true) {
                     if (isset($ventaGuardada) && isset($result->comprobante)) {
-                      $ahora = new \DateTime();
+                      $ahora = new DateTime();
                       $ret->aut = "{$result->comprobante->estado} - Clave de acceso: {$result->comprobante->numeroAutorizacion} | Fecha de autorizacion: {$result->comprobante->fechaAutorizacion}";
                       $ventaGuardada->CEAutorizacion = $ret->ven->CEClaveAcceso;
                       $ventaGuardada->CERespuestaMsj = $result->mensaje;
-                      $ventaGuardada->CERespuestaId  = '7114'; // QUEMADO: CAMBIAR A PARAMETRO SELECCIONADO DE UN COMBO 
-                      $ventaGuardada->CEAutorizaFecha = date_format(new \DateTime(), 'Y-m-d H:i:s');
+                      //$ventaGuardada->CERespuestaId  = '7114'; // QUEMADO: CAMBIAR A PARAMETRO SELECCIONADO DE UN COMBO 
+                      $ventaGuardada->CEAutorizaFecha = date_format(new DateTime(), 'Y-m-d H:i:s');
                       $ventaGuardada->CEContenido = "<autorizacion>" .
                         "<estado>{$result->comprobante->estado}</estado>" .
                         "<numeroAutorizacion>{$result->comprobante->numeroAutorizacion}</numeroAutorizacion>" .
@@ -453,6 +468,25 @@ class VentasController extends ControllerBase  {
                         "<ambiente>{$result->comprobante->ambiente}</ambiente>" .
                         "<comprobante><![CDATA[{$result->comprobante->comprobante}]]></comprobante>" .
                         "</autorizacion>";
+                      $ret->msj = "Factura autorizada";
+                      if (!$ventaGuardada->update()) {
+                        $ret->msj = "Error al actualizar la factura";
+                        $msj = "No se pudo crear el nuevo registro: \n";
+                        foreach ($ventaGuardada->getMessages() as $m) {
+                          $msj .= "{$m} \n";
+                        }
+                        $m = 1;
+                      }
+                      if ($enviar) {
+                        $ventaEnviar = Ventas::findFirstById($respVta->ven->Id);
+                        $fc = new FirmaElectronicaController();
+                        $respEnvio = $fc->enviarCorreoComprobante($ventaEnviar);
+                        if ($respEnvio->res) {
+                          $ret->msj .= " y enviada por correo exitosamente";
+                        } else {
+                          $ret->msj .= ", pero no se pudo enviar por correo";
+                        }
+                      }
                     }
                   } else {
                     if (isset($ventaGuardada)) {
@@ -462,15 +496,22 @@ class VentasController extends ControllerBase  {
                       $ret->aut = "{$result->proceso} - {$autMensaje}: {$autInfoAdicional}";
                       $ventaGuardada->CERespuestaMsj = "{$result->proceso} - {$autMensaje}: {$autInfoAdicional}";
                       $ventaGuardada->CEContenido = $result->comprobante ?? "";
+                      if (!$ventaGuardada->update()) {
+                        $ret->msj = "Error al actualizar la factura";
+                        $msj = "No se pudo crear el nuevo registro: \n";
+                        foreach ($ventaGuardada->getMessages() as $m) {
+                          $msj .= "{$m} \n";
+                        }
+                        $m = 1;
+                      }
                     }
-                  }
-                  $ventaGuardada->update();
+                  }                  
                 } else {
                   // respuesta nula
                 }
               } catch (Exception $e) {
                 $this->response->setStatusCode(500, 'Error');  
-                $msj = $e->getMessage();
+                $ret->msj = $e->getMessage();
               }
             }
             $this->response->setStatusCode(201, 'Ok');
@@ -525,11 +566,6 @@ class VentasController extends ControllerBase  {
     
     $vendoble = false;
     try {
-      /*$fechaComparar = str_replace("T", " ", $datos->Fecha);
-      $cmd = "select Id from Pointerp\Modelos\Ventas\Ventas 
-        where Tipo = {$datos->Tipo} and SucursalId = {$datos->SucursalId} and substr(cast(Fecha as char), 1, 19) = substr('{$fechaComparar}', 1, 19)";
-      $qry = new Query($cmd, Di::getDefault());
-      $rws = $qry->execute();*/
       $fechaComparar = (new DateTime($datos->Fecha))->format('Y-m-d H:i:s');
       $cmd = "SELECT Id FROM Pointerp\Modelos\Ventas\Ventas 
         WHERE Tipo = :tipo: 
@@ -554,9 +590,9 @@ class VentasController extends ControllerBase  {
         $datos->CEClaveAcceso = $res->clave;
         $datos->CERespuestaTipo = $res->secuencial;
       }
-      $ret = $this->guardarVentaNueva($datos, $cobrado, false);
-      if ($ret->res) {
-        $vta = $ret->ven;
+      $respVta = $this->guardarVentaNueva($datos, $cobrado, false);
+      if ($respVta->res) {
+        $vta = $respVta->ven;
         $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
         $cobro = new Comprobantes();
         $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
@@ -596,21 +632,21 @@ class VentasController extends ControllerBase  {
             if(!$cobitem->create()) {
               $msj = "No se pudo crear el nuevo Item: " . "\n";
               foreach ($cobitem->getMessages() as $m) {
-                $msj .= $m . "\n";
+                $msj .= "{$m}\n";
               }
               $ret->msj = $msj;
             }
           } else {
             $msj = "No se pudo crear el nuevo Documento: " . "\n";
             foreach ($doc->getMessages() as $m) {
-              $msj .= $m . "\n";
+              $msj .= "{$m}\n";
             }
             $ret->msj = $msj;
           }
         } else {
-          $msj = "No se pudo crear el nuevo cobro: " . "\n";
+          $msj = "No se pudo crear el nuevo cobro:\n";
           foreach ($cobro->getMessages() as $m) {
-            $msj .= $m . "\n";
+            $msj .= "{$m}\n";
           }
           $ret->msj = $msj;
         }
@@ -631,6 +667,10 @@ class VentasController extends ControllerBase  {
     $id = $this->dispatcher->getParam('id');
     $res = Ventas::findFirstById($id);
     if ($res) {
+        $resItems = VentasItems::find([
+          "conditions" => "VentaId = {$res->Id}"
+        ]);
+        $res->relItems = $resItems;
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $res = [];
@@ -710,8 +750,14 @@ class VentasController extends ControllerBase  {
                 "<comprobante><![CDATA[{$result->comprobante->comprobante}]]></comprobante>" .
                 "</autorizacion>";
               if ($ven->update()) {
+                $msj = "Factura autorizada";
                 $fc = new FirmaElectronicaController();
-                $fc->enviarComprobantePorEmail($ven->Id);
+                $respEnvio = $fc->enviarCorreoComprobante($ven);
+                if ($respEnvio->res) {
+                  $msj .= " y enviada por correo exitosamente";
+                } else {
+                  $msj = ", pero no se pudo enviar por correo";
+                }
               }
             }
           } else {
@@ -1002,6 +1048,11 @@ class VentasController extends ControllerBase  {
             $ins->Costo = $mi->Costo;
             $ins->create();
             if ($datos->Tipo == FACTURA) {
+              if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) > 0) {
+                $mi->relProducto->relImposiciones = ProductosImposiciones::find([
+                  "conditions" => "ProductoId = ${$mi->ProductoId}"
+                ]);
+              }
               foreach ($mi->relProducto->relImposiciones as $imps)
               {
                 $valor = 0;
@@ -1021,6 +1072,7 @@ class VentasController extends ControllerBase  {
 
                 if ($valor > 0) {
                   $vimp = new VentasImpuestos();
+                  $vimp->VentaId = $ven->Id;
                   $vimp->ImpuestoId = $imps->ImpuestoId;
                   $vimp->Porcentaje = $porcentaje;
                   $vimp->Valor = round($valor, 2);

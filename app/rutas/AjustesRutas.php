@@ -42,5 +42,9 @@ class AjustesRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'empresaClavePorCId',
     ]);
+    $this->addGet('/empresa/{emp}/parametros', [
+      'controller' => $controlador,
+      'action'     => 'parametrosPorEmpresa',
+    ]);
   }
 }

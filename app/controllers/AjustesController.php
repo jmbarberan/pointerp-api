@@ -5,6 +5,7 @@ namespace Pointerp\Controladores;
 use Phalcon\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\EmpresaClaves;
+use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Sucursales;
 use Pointerp\Modelos\Empresas;
@@ -164,6 +165,19 @@ class AjustesController extends ControllerBase  {
     ]);
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($clave));
+    $this->response->send();
+  }
+
+  public function parametrosPorEmpresaAction() {
+    $this->view->disable();
+    $emp = $this->dispatcher->getParam('emp');
+    $params = EmpresaParametros::find([
+        'conditions' => 'EmpresaId = :empId:',
+        'bind' => ['empId' => $emp],
+        'order' => 'Indice'
+    ]);
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($params));
     $this->response->send();
   }
 }

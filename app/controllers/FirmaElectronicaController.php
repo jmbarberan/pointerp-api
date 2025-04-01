@@ -33,24 +33,46 @@ class FirmaElectronicaController extends ControllerBase  {
     $this->response->send();
   }
 
-  public function enviarComprobantePorEmail($ventaId) {
-    $valido = false;
+  public function enviarComprobantePorEmailAction($ventaId) {
     $venta = Ventas::findFirst($ventaId);
-    $di = Di::getDefault();
-    $config = $di->get('config');
-    $subscripcion = $config->entorno->subscripcion;
+    $respEnvio = $this->enviarCorreoComprobante($venta);
     $ret = (object) [
-      'res' => false,
-      'cid' => 0,
-      'msj' => 'Los datos no se pudieron procesar',
-      'det' => '',
-    ];
-    if (isset($venta)) {      
+			'res' => $respEnvio->res,
+			'cid' => $respEnvio->cid,
+			'msj' => $respEnvio->msj,
+			'det' => $respEnvio->det,
+		];
+		$codMsg = "Ok";
+    if ($respEnvio->cod == 500) {
+			$codMsg = "Error";
+		} elseif ($respEnvio->cod == 404) {
+			$codMsg = "Not found";
+		} elseif ($respEnvio->cod == 402) {
+			$codMsg = "Bad request";
+		}
+		$this->response->setStatusCode($respEnvio->cod, $codMsg);
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($ret));
+    $this->response->send();
+  }
+
+  public function enviarCorreoComprobante($venta) {
+		$valido = false;
+		$di = Di::getDefault();
+		$config = $di->get('config');
+		$subscripcion = $config->entorno->subscripcion;
+		$ret = (object) [
+			'res' => false,
+			'msj' => 'Los datos no se pudieron procesar',
+			'det' => '',
+			'cod' => 500
+		];
+    if (isset($venta)) {
       $clienteData = $venta->relCliente;
       if (!isset($clienteData)) {
         $clienteData = Clientes::findFirst($venta->ClienteId);
       }
-      if (isset($clienteData->email)) {
+      if (isset($clienteData->Email)) {
         // verificar si el correo es valido TODO
         $empresa = Empresas::findFirst($clienteData->EmpresaId);
         $subscripcionData = SubscripcionesEmpresas::findFirst([
@@ -64,13 +86,14 @@ class FirmaElectronicaController extends ControllerBase  {
         $xmlString = $venta->CEContenido;
         // cargar de plantilla reemplazar valores
         //$htmlParaPdf = '<h1>Factura</h1><p>Este es un contenido para el PDF de impresión.</p>'; // viene de la plantilla
+        $valido = true;
       } else {
         $ret->msj = "El cliente no tiene correo registrado";
-        $this->response->setStatusCode(402, 'Not Acceptable');
+        $ret->cod = 402;
       }
     } else {
       $ret->msj = "El numero de comprobante no existe";
-      $this->response->setStatusCode(404, 'Not found');
+      $ret->cod = 404;
     }
     
     if ($valido) {
@@ -80,13 +103,11 @@ class FirmaElectronicaController extends ControllerBase  {
         $mail->isSMTP();
         $mail->Host = $subscripcionData->email_host;
         $mail->SMTPAuth = true;
-        //$mail->SMTPSecure = "tls";
         $mail->Username = $subscripcionData->email_user;
-        $mail->Password = $subscripcionData->email_pass;
-        /*if ($subscripcionData->email_tls == "1") {
-          $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        }*/
+        $mail->Password = $subscripcionData->email_pas;
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
         $mail->Port = $subscripcionData->email_port;
+        $mail->isHTML(true);
 
         // Configuración del correo
         $mail->setFrom($subscripcionData->email_dir, $empresa->NombreComercial);
@@ -115,23 +136,24 @@ class FirmaElectronicaController extends ControllerBase  {
         $pdf->SetFont('times', '', 12);
         $pdf->AddPage();
 
-
         $type = 'C128';
         $barcodeFile = "barcode{$venta->CEClaveAcceso}.png";
         $bc = new TCPDFBarcode($venta->CEClaveAcceso, $type);
-        $barcodePNG = $bc->getBarcodePngData(2, 60, array(0,0,0));
+        $barcodePNG = $bc->getBarcodePngData(2, 60, [0,0,0]);
         $pathPng = __DIR__ . DIRECTORY_SEPARATOR . $barcodeFile;
         if ($barcodePNG !== false) {
-            file_put_contents($pathPng, $barcodePNG);
+          file_put_contents($pathPng, $barcodePNG);
         }
-
         
         $logoStyle = $subscripcionData->logo_style;
         $logoFile = $subscripcionData->logo_file;
         $empObligadoContabilidad = $empresa->ObligadoContabilidad > 0 ? "SI" : "NO";
 
-        $total = $venta->Subtotal + $venta->Subtotal0 + $venta->Impuestos;
-        $total = number_format($venta->Total, 2, ".", ",");
+        $fSubtotal = number_format($venta->Subtotal, 2, ".", ",");
+        $fSubtotalEx = number_format($venta->SubtotalEx, 2, ".", ",");
+        $fImpuestos = number_format($venta->Impuestos, 2, ".", ",");
+        $total = $venta->Subtotal + $venta->SubtotalEx + $venta->Impuestos;
+        $total = number_format($total, 2, ".", ",");
         $sucursal = $venta->relSucursal;
         if (!isset($sucursal)) {
           $sucursal = Sucursales::findFirst($venta->SucursalId);
@@ -141,8 +163,8 @@ class FirmaElectronicaController extends ControllerBase  {
         $oAmbiente = Registros::findFirst([
           "conditions" => "Id = {$empresa->TipoAmbiente}"
         ]);
-        if (isset($oAmbiente)) {	
-          $ambiente = $oAmbiente->Denonimacion;
+        if (isset($oAmbiente)) {
+          $ambiente = $oAmbiente->Denominacion;
         }
         $regimen = "";
         $oRegimen = EmpresaParametros::findFirst([
@@ -153,28 +175,31 @@ class FirmaElectronicaController extends ControllerBase  {
             Estado = 0"
         ]);
         if (isset($oRegimen)) {
-          $regimen = $oRegimen->Denonimacion;
+          $regimen = $oRegimen->Denominacion;
         }
         $formaPago = "Sin utlizacion del sistema financiero";
         $oFormaPago = Registros::findFirst([
           "conditions" => "Id = {$venta->CERespuestaId}"
         ]);
-        if (isset($oFormaPago)) {	
-          $formaPago = $oFormaPago->Denonimacion;
+        if (isset($oFormaPago)) {
+          $formaPago = $oFormaPago->Denominacion;
         }
 
         $htmlItems = "";
-        foreach ($venta->relDetalles as $detalle) {
+
+        foreach ($venta->relItems as $detalle) {
+          $fTotalItem = number_format(($detalle->Cantidad * $detalle->Precio), 2, ".", ",");
+          $fPrecio = number_format($detalle->Precio, 2, ".", ",");
           $htmlItems .= "<tr class=\"item\">
             <td>{$detalle->relProducto->Codigo}</td>
             <td class=\"descripcion-producto\">{$detalle->relProducto->Nombre}</td>
             <td class=\"valor\">{$detalle->Cantidad}</td>
-            <td class=\"valor\">{$detalle->Precio}</td>
+            <td class=\"valor\">{$fPrecio}</td>
             <td class=\"valor\">0.00</td>
-            <td class=\"valor\">{$detalle->Total}</td>
+            <td class=\"valor\">{$fTotalItem}</td>
           </tr>"."\n";
         }
-        $tbl = <<<EOD
+        $htmlFactura = <<<EOD
 <!DOCTYPE html>
 <html lang="es">
 	<head>
@@ -186,7 +211,7 @@ class FirmaElectronicaController extends ControllerBase  {
 				max-width: 800px;
 				margin: auto;
 				padding: 30px;
-				font-size: 14px;
+				font-size: 12px;
 				line-height: 1.5;
 				font-family: 'Helvetica Neue', 'Helvetica', Helvetica, Arial, sans-serif;
 				color: #555;
@@ -326,14 +351,14 @@ class FirmaElectronicaController extends ControllerBase  {
 								<td>
 									<span class="destacado">$empresa->RazonSocial</span><br/>
 									Direccion: $sucursal->Direccion<br/>
-									Telefonos: $sucursal->Telefonos<br/>
+									Telefonos: $sucursal->Telefono<br/>
 									Obligado a llevar contabilidad: $empObligadoContabilidad<br/>
 									$regimen<br/>
 								</td>
 
 								<td>
 									<div class="codebar">
-										<img src="barcodeFile" alt="Codebar" class="barcode" />
+										<img src="{$pathPng}" alt="Codebar"/>
 										<span>$venta->CEClaveAcceso</span>
 									</div>
 								</td>
@@ -343,21 +368,21 @@ class FirmaElectronicaController extends ControllerBase  {
 				</tr>
 
 				<tr class="heading" style="background-color: #e0e0e0;">
-					<td colspan="6" class="descripcion">Razon social / Nombres: <span class="destacado">$venta->relCliente->Nombres</span></td>
+					<td colspan="6" class="descripcion">Razon social / Nombres: <span class="destacado">$clienteData->Nombres</span></td>
 				</tr>
 
 				<tr class="details">
-					<td colspan="3">Cedula / R.U.C: <span class="destacado">$venta->relCliente->Identificacion</span></td>
-					<td colspan="3">Telefonos: <span class="destacado">$venta->relCliente->Telefonos</span></td>
+					<td colspan="3">Cedula / R.U.C: <span class="destacado">$clienteData->Identificacion</span></td>
+					<td colspan="3">Telefonos: <span class="destacado">$clienteData->Telefonos</span></td>
 				</tr>
 
 				<tr class="details">
-					<td colspan="4" class="descripcion">Direccion: <span class="destacado">$venta->relCliente->Direccion</span></td>
+					<td colspan="4" class="descripcion">Direccion: <span class="destacado">$clienteData->Direccion</span></td>
 					<td colspan="2">Guia de remision:</td>
 				</tr>
 
 				<tr class="details">
-					<td colspan="6" class="descripcion">Correo electronico: <span class="destacado">$venta->relCliente->Email</span></td>
+					<td colspan="6" class="descripcion">Correo electronico: <span class="destacado">$clienteData->Email</span></td>
 				</tr>
 
 				<tr class="heading" style="background-color: #e0e0e0;">
@@ -374,26 +399,26 @@ class FirmaElectronicaController extends ControllerBase  {
 				<tr class="total first">
 					<td colspan="4"></td>
 					<td>Subtotal</td>
-					<td>$venta->Subtotal</td>
+					<td>$fSubtotal</td>
 				</tr>
 				<tr class="total">
 					<td colspan="4">
 						<span class="destacado">Forma de pago: </span>$formaPago
 					</td>
 					<td>Subtotal 0%</td>
-					<td>$venta->SubtotalEx</td>
+					<td>$fSubtotalEx</td>
 				</tr>
 				<tr class="total">
 					<td colspan="4">
 						<span class="destacado">Numero control: </span>$venta->Numero
 					</td>
 					<td>Descuento</td>
-					<td>$0.00</td>
+					<td>0.00</td>
 				</tr>
 				<tr class="total">
 					<td colspan="4"></td>
 					<td>IVA 15%</td>
-					<td>$venta->Impuestos</td>
+					<td>$fImpuestos</td>
 				</tr>
 				<tr class="total last">
 					<td colspan="4"></td>
@@ -405,26 +430,28 @@ class FirmaElectronicaController extends ControllerBase  {
 	</body>
 </html>
 EOD; // end of html
-        $pdf->writeHTML($tbl, true, false, false, false, '');
+        $pdf->writeHTML($htmlFactura, true, false, false, false, '');
         $pdfOutput = $pdf->Output('comprobante.pdf', 'S');
         $mail->addStringAttachment($pdfOutput, 'comprobante.pdf', 'base64', 'application/pdf');
         if ($mail->send()) {
           $ret->res = true;
           $ret->msj = "Correo enviado con exito";
-          $this->response->setStatusCode(200, 'Ok');
+          $ret->cod = 200;
         } else {
           $ret->msj = "Se produjo un error al enviar el correo";
           $ret->det = $mail->ErrorInfo;
-          $this->response->setStatusCode(500, 'Ok');
+          $$ret->cod = 500;
         }
-      } catch (Exception $e) {
-        $ret->msj = "Se produjo un error al generar el correo";
+        $mail->smtpClose();
+        if ($barcodePNG !== false) {
+          unlink($pathPng);
+		    }
+			} catch (Exception $e) {
+				$ret->msj = "Se produjo un error al procesar el comprobante";
         $ret->det = $e->getMessage();
-        $this->response->setStatusCode(500, 'Not found');
-      }
-    }
-    $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($ret));
-    $this->response->send();
+				$ret->cod = 500;
+			}
+		}
+		return $ret;
   }
 }  

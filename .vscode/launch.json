@@ -5,16 +5,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "BI Web server",
+      "name": "Local web server launch",
       "type": "php",
       "request": "launch",
       "runtimeArgs": [
         "-dxdebug.mode=debug",
         "-dxdebug.start_with_request=yes",
-        "-S", "localhost:8090",
-        "-t", "${workspaceFolder}/public",
+        "-S",
+        "localhost:8090",
+        "-t",
+        "public"
       ],
+      "program": "",
+      "cwd": "C:\\Desarrollo\\Repositorios\\pointerp-api",
       "port": 9090,
+      "serverReadyAction": {
+        "pattern": "Development Server \\(http://localhost:([0-9]+)\\) started",
+        "uriFormat": "http://localhost:%s",
+        //"action": "openExternally"
+      },
       "env": {
         "DBS_HOST":"localhost",
         "DBS_NAME":"viniapro",
@@ -56,6 +65,42 @@
         "DBS_NAME":"viniapro",
         "DBS_USER":"postgres",
         "DBS_PASS":"jmbg1",
+        "DBS_PORT":"5432",
+        "DBS_SCHEME":"subscripciones",
+        "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",
+        "URL_SRIQRY_PARAMS":"?tipoPersona=N&_=1651364830986",
+        "URL_SRIFAC_ENV":"sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl",
+        "URL_SRIFAC_VAL":"sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl",
+        "SUBDOMINIO_SRIPRB":"https://celcer.",
+        "SUBDOMINIO_SRIPRO":"https://cel.",
+        "CORS_ORIGEN":"*"
+      }
+    },
+    {
+      "name": "Ecoferro server launch",
+      "type": "php",
+      "request": "launch",
+      "runtimeArgs": [
+        "-dxdebug.mode=debug",
+        "-dxdebug.start_with_request=yes",
+        "-S",
+        "localhost:8091",
+        "-t",
+        "public"
+      ],
+      "program": "",
+      "cwd": "C:\\Desarrollo\\Repositorios\\pointerp-api",
+      "port": 9090,
+      "serverReadyAction": {
+        "pattern": "Development Server \\(http://localhost:([0-9]+)\\) started",
+        "uriFormat": "http://localhost:%s",
+        //"action": "openExternally"
+      },
+      "env": {
+        "DBS_HOST":"192.168.3.77",
+        "DBS_NAME":"viniapro",
+        "DBS_USER":"postgres",
+        "DBS_PASS":"jmbg",
         "DBS_PORT":"5432",
         "DBS_SCHEME":"subscripciones",
         "URL_SRIQRY_BASE":"https://srienlinea.sri.gob.ec/movil-servicios/api/v1.0/deudas/porIdentificacion/",

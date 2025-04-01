@@ -48,9 +48,20 @@ class Ventas extends Modelo
       $items = [];
       foreach ($this->relItems as $it) {
         if ($it->relProducto != null) {
-          $ins = $it->toArray();
-          $ins['relProducto'] = $it->relProducto->asUnicodeArray(['Codigo', 'Nombre', 'Descripcion', 'Medida']);
-          array_push($items, $ins);
+          $insItem = $it->toArray();
+          if (isset($it->relProducto) && isset($it->relProducto->relImposiciones)) { 
+            $insItem['relProducto'] = $it->relProducto->toArray();
+            $imposiciones = [];
+            foreach ($it->relProducto->relImposiciones as $impo) {
+              if ($impo->relImpuesto != null) {
+                $impoItem = $impo->toArray();
+                $impoItem['relImpuesto'] = $impo->relImpuesto->toArray();
+                array_push($imposiciones, $impoItem);
+              }
+            }
+            $insItem['relProducto']['relImposiciones'] = $imposiciones;
+          }
+          array_push($items, $insItem);
         }
       }
       $res['relItems'] = $items;

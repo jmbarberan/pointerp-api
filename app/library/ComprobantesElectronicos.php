@@ -38,7 +38,7 @@ class ComprobantesElectronicos {
       'proceso' => ''
     ];
     $ambiente = '1';
-    $contribuyente = Empresas::findFirstById($comprobante->relCliente->EmpresaId);
+    $contribuyente = Empresas::findFirstById($comprobante->relSucursal->EmpresaId);
     #region Ambiente
     if (isset($contribuyente)) {
       $reg = Registros::findFirstById($contribuyente->TipoAmbiente);
@@ -77,7 +77,7 @@ class ComprobantesElectronicos {
   }
 
   private static function crearXmlFactura($comprobante) {
-    $contribuyente = Empresas::findFirstById($comprobante->relCliente->EmpresaId);
+    $contribuyente = Empresas::findFirstById($comprobante->relSucursal->EmpresaId);
     $tipoDatos = (object) [
       'tipoDocumento' => '01', // 01: FACTURA
       'tipoEmision' => '1',  // OFFLINE UNICO VALOR VALIDO
@@ -91,7 +91,7 @@ class ComprobantesElectronicos {
     }
     // traer datos del impuesto vigente
     $paramFaEmpresa = EmpresaParametros::findFirst([
-      'conditions' => "EmpresaId = {$comprobante->relCliente->EmpresaId} AND Tipo = 1"      
+      'conditions' => "EmpresaId = {$comprobante->relSucursal->EmpresaId} AND Tipo = 1"      
     ]);    
     // traer todos los impuestos a un arreglo indexado
     $impuestosAr = [];

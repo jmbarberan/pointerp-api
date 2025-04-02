@@ -223,11 +223,18 @@ class VentasController extends ControllerBase  {
   public function ventaGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
+
       $generarCA = $this->request->getQuery('generarCA', null, false);
       $autorizar = $this->request->getQuery('autorizar', null, false);
       $enviar = $this->request->getQuery('enviar', null, false);
+      try {
+        $version = $this->request->getQuery('version', null, 4);
+      } catch (Exception $ex) {
+        $version = 4;
+      }
       $autorizar = $autorizar === 'true';
       $enviar = $enviar === 'true';
+      $version = intVal($version);
       $ret = (object) [
         'res' => false,
         'cid' => $datos->Id,
@@ -412,32 +419,13 @@ class VentasController extends ControllerBase  {
       } else {
         // Crear factura nueva
         $vendoble = false;
-        /*try {
-          //$fechaComparar = str_replace("T", " ", $datos->Fecha);
-          $fechaComparar = (new DateTime($datos->Fecha))->format('Y-m-d H:i:s');
-          $cmd = "SELECT Id FROM Pointerp\Modelos\Ventas\Ventas 
-            WHERE Tipo = :tipo: 
-            AND SucursalId = :sucursalId: 
-            AND Fecha = :fecha:";
-          $qry = new Query($cmd, Di::getDefault());
-          $rws = $qry->execute([
-              'tipo' => $datos->Tipo,
-              'sucursalId' => $datos->SucursalId,
-              'fecha' => $fechaComparar
-          ]);
-          $vendoble = $rws->count() > 0;
-        }
-        catch(Exception $ex) {
-          $ret->msj = $ex;
-        }*/
-
         if (!$vendoble) {
           if ($generarCA && $datos->Tipo == 11) {
             $res = $this->generarClaveAcceso($datos->SucursalId);
             $datos->CEClaveAcceso = $res->clave;
             $datos->CERespuestaTipo = $res->secuencial;
           }
-          $respVta = $this->guardarVentaNueva($datos, 0, false);
+          $respVta = $this->guardarVentaNueva($datos, 0, false, $version);
           $ret->num = $respVta->ven->Numero;
           $ret->ven = $respVta->ven;
           $ret->cid = $respVta->ven->Id;
@@ -447,7 +435,7 @@ class VentasController extends ControllerBase  {
               require_once APP_PATH . '/library/ComprobantesElectronicos.php';
               try {
                 $paramCert = EmpresaParametros::findFirst([
-                  'conditions' => "Tipo = 19 AND EmpresaId = {$respVta->ven->relCliente->EmpresaId}"
+                  'conditions' => "Tipo = 19 AND EmpresaId = {$respVta->ven->relSucursal->EmpresaId}"
                 ]);
                 \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
                 $result = \ComprobantesElectronicos::autorizarFactura($respVta->ven);
@@ -459,7 +447,6 @@ class VentasController extends ControllerBase  {
                       $ret->aut = "{$result->comprobante->estado} - Clave de acceso: {$result->comprobante->numeroAutorizacion} | Fecha de autorizacion: {$result->comprobante->fechaAutorizacion}";
                       $ventaGuardada->CEAutorizacion = $ret->ven->CEClaveAcceso;
                       $ventaGuardada->CERespuestaMsj = $result->mensaje;
-                      //$ventaGuardada->CERespuestaId  = '7114'; // QUEMADO: CAMBIAR A PARAMETRO SELECCIONADO DE UN COMBO 
                       $ventaGuardada->CEAutorizaFecha = date_format(new DateTime(), 'Y-m-d H:i:s');
                       $ventaGuardada->CEContenido = "<autorizacion>" .
                         "<estado>{$result->comprobante->estado}</estado>" .
@@ -732,7 +719,7 @@ class VentasController extends ControllerBase  {
       require_once APP_PATH . '/library/ComprobantesElectronicos.php';
       try {
         $paramCert = EmpresaParametros::findFirst([
-          'conditions' => "Tipo = 19 AND EmpresaId = {$ven->relCliente->EmpresaId}"
+          'conditions' => "Tipo = 19 AND EmpresaId = {$ven->relSucursal->EmpresaId}"
         ]);
         \ComprobantesElectronicos::cargarCertificado($paramCert->Denominacion, $paramCert->Extendido);
         $result = \ComprobantesElectronicos::autorizarFactura($ven);
@@ -965,7 +952,7 @@ class VentasController extends ControllerBase  {
     ]) ?? 0;
   }
 
-  private function guardarVentaNueva($datos, $cobrado, $min) {
+  private function guardarVentaNueva($datos, $cobrado, $min, $version = 4) {
     $ret = (object) [
       'res' => false,
       'cid' => 0,
@@ -1048,39 +1035,78 @@ class VentasController extends ControllerBase  {
             $ins->Costo = $mi->Costo;
             $ins->create();
             if ($datos->Tipo == FACTURA) {
-              if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) > 0) {
-                $mi->relProducto->relImposiciones = ProductosImposiciones::find([
-                  "conditions" => "ProductoId = ${$mi->ProductoId}"
-                ]);
-              }
-              foreach ($mi->relProducto->relImposiciones as $imps)
-              {
-                $valor = 0;
-                $porcentaje = 0;
-                if (isset($imps->relImpuesto))
-                {
-                  $porcentaje = $imps->relImpuesto->Porcentaje;
-                  $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+              if ($version == 4) {
+                if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) > 0) {
+                  $mi->relProducto->relImposiciones = ProductosImposiciones::find([
+                    "conditions" => "ProductoId = ${$mi->ProductoId}"
+                  ]);
                 }
-                else
+                foreach ($mi->relProducto->relImposiciones as $imps)
                 {
-                  $impuesto = Impuestos::FindById($imps->ImpuestoId);
-                  if (isset($impuesto))
-                    $porcentaje = $impuesto->Porcentaje;
+                  $valor = 0;
+                  $porcentaje = 0;
+                  if (isset($imps->relImpuesto))
+                  {
+                    $porcentaje = $imps->relImpuesto->Porcentaje;
                     $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                  }
+                  else
+                  {
+                    $impuesto = Impuestos::FindById($imps->ImpuestoId);
+                    if (isset($impuesto))
+                      $porcentaje = $impuesto->Porcentaje;
+                      $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                  }
+                  if ($valor > 0) {
+                    $vimp = new VentasImpuestos();
+                    $vimp->VentaId = $ven->Id;
+                    $vimp->ImpuestoId = $imps->ImpuestoId;
+                    $vimp->Porcentaje = $porcentaje;
+                    $vimp->Valor = round($valor, 2);
+                    $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                    array_push($datos->relImpuestos, $vimp);
+                  }
                 }
+              } else {
+                $impuesto = Impuestos::findFirst([
+                  "conditions" => "Porcentaje = 0 AND Estado = 0"
+                ]);
 
-                if ($valor > 0) {
+                $impuestoVigenteId = 0;
+                $empresaParam = EmpresaParametros::findFirst([
+                  "conditions" => "EmpresaId = {$ven->relSucursal->EmpresaId} AND Tipo = 1 AND Referencia = 11"
+                ]);
+                if (isset($empresaParam)) {
+                  $impuestoVigenteId = $empresaParam->RegistroId;
+                }
+                $impuestoId = $mi->relProducto->Existencia > 0 ? $impuestoVigenteId : $mi->relProducto->Marca;  
+                if ($impuestoId > 0) {
+                  $impuestoFind = Impuestos::findFirst([
+                    "conditions" => "Activo = 1 ORDER BY Porcentaje DESC LIMIT 1"
+                  ]);
+                  if (isset($impuestoFind)) {
+                    $impuesto = $impuestoFind;
+                  }
+                }
+                if (isset($impuesto)) {
+                  $porcentaje = $impuesto->Porcentaje;
+                  $valor = 0;
+                  if ($porcentaje > 0) {
+                    $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;  
+                  }
                   $vimp = new VentasImpuestos();
-                  $vimp->VentaId = $ven->Id;
-                  $vimp->ImpuestoId = $imps->ImpuestoId;
-                  $vimp->Porcentaje = $porcentaje;
-                  $vimp->Valor = round($valor, 2);
-                  $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
-                  array_push($datos->relImpuestos, $vimp);
+                  if ($valor > 0) {
+                    $vimp = new VentasImpuestos();
+                    $vimp->VentaId = $ven->Id;
+                    $vimp->ImpuestoId = $imps->ImpuestoId;
+                    $vimp->Porcentaje = $porcentaje;
+                    $vimp->Valor = round($valor, 2);
+                    $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                    array_push($datos->relImpuestos, $vimp);
+                  }
                 }
               }
-            }
+            }  
           }
           if ($datos->Tipo == FACTURA) {
             foreach ($datos->relImpuestos as $im) {

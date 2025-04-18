@@ -67,6 +67,10 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventaCrearCobrar',
     ]);
+    $this->addPost('/comprobantes/guardar-win/usuario/{usuario}/caja/{caja}/cobrar/{cobrar}', [
+      'controller' => $controlador,
+      'action'     => 'ventaWinGuardarNuevo',
+    ]);
     $this->addGet('/comprobantes/sucursal/{sucursal}/estado/{estado}/desde/{desde}/hasta/{hasta}/electronicos', [
       'controller' => $controlador,
       'action'     => 'ventasDiarioCE',

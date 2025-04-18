@@ -24,6 +24,7 @@ use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Sucursales;
 use Phalcon\Paginator\Adapter\Model as PaginatorModel;
+use Phalcon\Paginator\Adapter\QueryBuilder as PagQueryBuilder;
 
 class VentasController extends ControllerBase  {
 
@@ -37,11 +38,25 @@ class VentasController extends ControllerBase  {
     $clase = $this->dispatcher->getParam('clase');
     $desde = $this->dispatcher->getParam('desde');
     $hasta = $this->dispatcher->getParam('hasta');    
-    $condicion = "Tipo in (11, 12) AND SucursalId = " . $suc;
+    $condicion = "SucursalId = {$suc}";
+    try {
+      $page = $this->request->getQuery('page', null, 0);
+      $limit = $this->request->getQuery('limit', null, 0);
+      $order = $this->request->getQuery('order', null, 'Numero');
+      $orderDir = $this->request->getQuery('dir', null, '');
+      $vtaType = $this->request->getQuery('doctype', null, '11');
+    } catch (Exception $ex) {
+      $page = 0;
+      $limit = 0;
+      $order = 'Numero';
+      $orderDir = '';
+      $vtaType = '11';
+    }
+    $condicion .= " AND Tipo in ({$vtaType})";
     $res = [];
-    if ($clase < 3) {      
+    if ($clase < 3) {
       if ($clase <= 1) {
-        $condicion .= " AND Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";
+        $condicion .= " AND Fecha >= '{$desde}' AND Fecha <= '{$hasta}'";
       } else {
         if (strlen($filtro) > 1) {
           if ($clase == 2) {
@@ -55,28 +70,73 @@ class VentasController extends ControllerBase  {
               $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
             }
           }
-          $condicion .= " AND `Notas` like '" . $filtro . "'";
+          $condicion .= " AND `Notas` like '{$filtro}'";
         }
       }
     } else {
-      $condicion .= " AND Numero = " . $filtro;
+      $condicion .= $clase == 4 ? " AND ClienteId = {$filtro}" : " AND Numero = {$filtro}";
     }
 
-    if (strlen($condicion) > 0) {
-      $condicion .= ' AND Estado = 0';
-      $res = Ventas::find([
+    if ($estado == 0) {
+      if (strlen($condicion) > 0) {
+        $condicion .= ' AND Estado = 0';
+      } else {
+        $condicion = 'Estado = 0';
+      }
+    }
+
+    $hasData = false;
+    $sales = [];
+    if ($page > 0 && $limit > 0) {
+      $builder = $this->modelsManager->createBuilder()
+                ->columns("Id")
+                ->from(Ventas::class)
+                ->where($condicion)
+                ->orderBy("Numero");
+      $paginator = new PagQueryBuilder([
+        'builder' => $builder,
+        'limit'   => $limit,
+        'page'    => $page
+      ]);
+      $resultado = [];
+      $totalItems = 0;
+      $completo = false;
+      try {
+        $completo = true;
+        $pageData = $paginator->paginate();
+        if (isset($pageData)) {
+          foreach ($pageData->items as $venta) {
+            $resultado[] = VentasMin::findFirst($venta->Id)->jsonSerialize();
+          }
+          $totalItems = $pageData->getTotalItems();  
+        }
+      } catch (Exception $ex) {
+        //$m = $ex->getMessage();
+      }
+      
+      $sales = (object) [
+        'completo' => $completo,
+        'total' => $totalItems,
+        'items' => $resultado
+      ];
+      $jsonSales = json_encode($sales);
+      $hasData = $totalItems > 0;
+    } else {
+      $sales = Ventas::find([
         'conditions' => $condicion,
         'order' => 'Fecha'
       ]);
+      $jsonSales = json_encode($sales);
+      $hasData = $sales->count() > 0;
     }
 
-    if ($res->count() > 0) {
+    if ($hasData) {
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($res));
+    $this->response->setContent($jsonSales);
     $this->response->send();
   }
 
@@ -219,11 +279,275 @@ class VentasController extends ControllerBase  {
     $this->response->send();
   }
 
-
+  public function ventaWinGuardarNuevoAction() {
+    $this->view->disable();
+    $datos = $this->request->getJsonRawBody();
+    $cobrar = $this->dispatcher->getParam('cobrar');
+    $caja = $this->dispatcher->getParam('caja');
+    $usuario = $this->dispatcher->getParam('usuario');
+    $respuesta = (object) [
+      'existente' => false,
+      'guardado' => false,
+      'cobrado' => false,
+      'mensaje' => 'Los datos no se pudieron procesar',
+      'data' => null
+    ];
+    // buscar si ya existe
+    $uuidString = $datos->UCodigo;
+    $uuidBin = hex2bin(str_replace('-', '', $uuidString));
+    $ventaExiste = Ventas::findFirst([
+      'conditions' => 'identificador = :uuid:',
+      'bind'       => [ 'uuid' => $uuidBin ]
+    ]);
+    //$this->db->begin();
+    if ($ventaExiste) {
+      $respuesta->existente = true;
+      $respuesta->data = $ventaExiste;
+      $respuesta->mensaje = "La venta ya se encuentra registrada";
+      $this->response->setStatusCode(409, 'Conflict');
+    } else {
+      try {
+        $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
+        $ven = new Ventas();
+        $ven->Numero = $num;
+        $ven->Tipo = $datos->Tipo;
+        $ven->Fecha = $datos->Fecha;
+        $ven->SucursalId = $datos->SucursalId;
+        $ven->BodegaId = $datos->BodegaId;
+        $ven->Plazo = $datos->Plazo;
+        $ven->ClienteId = $datos->ClienteId;
+        $ven->VendedorId = $datos->VendedorId;
+        $ven->Notas = $datos->Notas;
+        $ven->PorcentajeDescuento = $datos->PorcentajeDescuento;
+        $ven->PorcentajeVenta = $datos->PorcentajeVenta;
+        $ven->Subtotal = $datos->Subtotal;
+        $ven->SubtotalEx = $datos->SubtotalEx;
+        $ven->Descuento = $datos->Descuento;
+        $ven->Recargo = $datos->Recargo;
+        $ven->Flete = $datos->Flete;
+        $ven->Impuestos = $datos->Impuestos;
+        $ven->Abonos = $datos->Abonos;
+        $ven->AbonosPf = $datos->AbonosPf;
+        $ven->Estado = $datos->Estado;
+        $ven->Especie = $datos->Especie; // receta, servicio medico
+        $ven->CEClaveAcceso = $datos->CEClaveAcceso;
+        $ven->CEAutorizacion = $datos->CEAutorizacion;
+        $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
+        $ven->CEContenido = $datos->CEContenido;
+        $ven->CEEtapa = $datos->CEEtapa;
+        $ven->CERespuestaId = $datos->CERespuestaId;
+        $ven->CERespuestaTipo = strval($datos->CERespuestaTipo);
+        $ven->CERespuestaMsj = $datos->CERespuestaMsj;
+        $ven->Comprobante = $datos->Comprobante;
+        $ven->Contado = $datos->Abonos > 0 ? 1 : 0;
+        $ven->Operador = $datos->Operador;
+        if ($ven->create()) {
+          // Crear items
+          foreach ($datos->relItems as $mi) {
+            $ins = new VentasItems();
+            $ins->VentaId = $ven->Id;
+            $ins->ProductoId = $mi->ProductoId;
+            $ins->Bodega = $mi->Bodega;
+            $ins->Cantidad = $mi->Cantidad;
+            $ins->Precio = $mi->Precio;
+            $ins->Descuento = $mi->Descuento;
+            $ins->Adicional = $mi->Adicional;
+            $ins->Despachado = $mi->Despachado;
+            if (isset($mi->Codigo)) {
+              $ins->Codigo = $mi->Codigo;
+            }
+            $ins->Costo = $mi->Costo;
+            $ins->create();
+            if ($datos->Tipo == FACTURA) {
+              if ($version == 4) {
+                if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) > 0) {
+                  $mi->relProducto->relImposiciones = ProductosImposiciones::find([
+                    "conditions" => "ProductoId = ${$mi->ProductoId}"
+                  ]);
+                }
+                foreach ($mi->relProducto->relImposiciones as $imps)
+                {
+                  $valor = 0;
+                  $porcentaje = 0;
+                  if (isset($imps->relImpuesto))
+                  {
+                    $porcentaje = $imps->relImpuesto->Porcentaje;
+                    $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                  }
+                  else
+                  {
+                    $impuesto = Impuestos::FindById($imps->ImpuestoId);
+                    if (isset($impuesto))
+                      $porcentaje = $impuesto->Porcentaje;
+                      $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;
+                  }
+                  if ($valor > 0) {
+                    $vimp = new VentasImpuestos();
+                    $vimp->VentaId = $ven->Id;
+                    $vimp->ImpuestoId = $imps->ImpuestoId;
+                    $vimp->Porcentaje = $porcentaje;
+                    $vimp->Valor = round($valor, 2);
+                    $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                    array_push($datos->relImpuestos, $vimp);
+                  }
+                }
+  
+              } else {
+                $impuesto = Impuestos::findFirst([
+                  "conditions" => "Porcentaje = 0 AND Estado = 0"
+                ]);
+  
+                $impuestoVigenteId = 0;
+                $empresaParam = EmpresaParametros::findFirst([
+                  "conditions" => "EmpresaId = {$ven->relSucursal->EmpresaId} AND Tipo = 1 AND Referencia = 11"
+                ]);
+                if (isset($empresaParam)) {
+                  $impuestoVigenteId = $empresaParam->RegistroId;
+                }
+                $impuestoId = $mi->relProducto->Existencia > 0 ? $impuestoVigenteId : $mi->relProducto->Marca;  
+                if ($impuestoId > 0) {
+                  $impuestoFind = Impuestos::findFirst([
+                    "conditions" => "Activo = 1 ORDER BY Porcentaje DESC LIMIT 1"
+                  ]);
+                  if (isset($impuestoFind)) {
+                    $impuesto = $impuestoFind;
+                  }
+                }
+                if (isset($impuesto)) {
+                  $porcentaje = $impuesto->Porcentaje;
+                  $valor = 0;
+                  if ($porcentaje > 0) {
+                    $valor = (($mi->Cantidad * $mi->Precio) * $porcentaje) / 100;  
+                  }
+                  $vimp = new VentasImpuestos();
+                  if ($valor > 0) {
+                    $vimp = new VentasImpuestos();
+                    $vimp->VentaId = $ven->Id;
+                    $vimp->ImpuestoId = $imps->ImpuestoId;
+                    $vimp->Porcentaje = $porcentaje;
+                    $vimp->Valor = round($valor, 2);
+                    $vimp->base = round(($mi->Cantidad * $mi->Precio), 2);
+                    array_push($datos->relImpuestos, $vimp);
+                  }
+                }
+              }
+            }          
+          }
+          if ($datos->Tipo == FACTURA) {
+            foreach ($datos->relImpuestos as $im) {
+              $ins = new VentasImpuestos();
+              $ins->VentaId = $ven->Id;
+              $ins->ImpuestoId = $im->ImpuestoId;
+              $ins->Porcentaje = $im->Porcentaje;
+              $ins->base = $im->base;
+              $ins->Valor = $im->Valor;
+              $ins->create();
+            }
+          }
+          $respuesta->guardado = true;
+          if ($cobrar && $usuario > 0 && $caja > 0) {
+            $cobrado = floatval($datos->Subtotal) + 
+              floatval($datos->SubtotalEx) + 
+              floatval($datos->Impuestos) + 
+              floatval($datos->Descuento) + 
+              floatval($datos->Recargo) + 
+              floatval($datos->Flete);
+            $usuario = $this->dispatcher->getParam('usuario');  
+            $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
+            $cobro = new Comprobantes();
+            $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
+            $cobro->Fecha = date_format(new DateTime(),"Y-m-d H:i:s");
+            $cobro->Total = $cobrado;
+            $cobro->SucursalId = $datos->SucursalId;
+            $cobro->Especie = 0;
+            $cobro->Numero = $cobroNum;
+            $cobro->UsuarioId = $usuario;
+            $cobro->Estado = 0;
+            if ($cobro->create()) {
+              $doc = new ComprobanteDocumentos();
+              if ($ven->Tipo == 47) { // (int)EntidadesEnum.EnPedido
+                $doc->Concepto = 52; // (int)EntidadesEnum.EnAbonosEfectivo
+                $doc->Notas = "Abono a pedido reservado";
+              } else {
+                $doc->Notas = "Cobro de venta de contado";
+              }
+              $doc->ComprobanteId = $cobro->Id;
+              $doc->Origen = $ven->Tipo;
+              $doc->Referencia = $ven->Id;
+              $doc->Rebajas = $cobrado;
+              $doc->Recargos = 0;
+              $doc->Soporte = 0;
+              if($doc->create()) {
+                $cobitem = new ComprobanteItems();
+                $cobitem->ComprobanteId = $cobro->Id;
+                $cobitem->Numero = $caja; // id de la caja
+                $cobitem->Fecha = date_format(new DateTime(),"Y-m-d H:i:s");
+                $cobitem->Cuenta = " ";
+                $cobitem->Autorizacion = " ";
+                $cobitem->Nombres = " ";
+                $cobitem->Codigo = " ";
+                $cobitem->Valor = $cobrado;
+                $cobitem->Descripcion = "";
+                $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
+                if(!$cobitem->create()) {
+                  $msj = "No se pudo crear el nuevo Item \n";
+                  foreach ($cobitem->getMessages() as $m) {
+                    $msj .= "{$m}\n";
+                  }
+                  $respuesta->mensaje = $msj;
+                }
+                $respuesta->cobrado = true;
+                $ven = Ventas::findFirst([
+                  'conditions' => "Id = {$ven->Id}",
+                ]);
+                $ven->Estado = 1;
+                $ven->Abonos = $cobrado;
+                $ven->update;
+              } else {
+                $msj = "No se pudo crear el nuevo Documento: " . "\n";
+                foreach ($doc->getMessages() as $m) {
+                  $msj .= "{$m}\n";
+                }
+                $respuesta->mensaje = $msj;
+              }
+            } else {
+              $msj = "No se pudo crear el nuevo cobro:\n";
+              foreach ($cobro->getMessages() as $m) {
+                $msj .= "{$m}\n";
+              }
+              $respuesta->mensaje = $msj;
+            }
+          } else {
+            $respuesta->mensaje = "Se creo correctamente el comprobante, pero no se pudo registrar el cobro";
+          }
+          if ($respuesta->guardado && $respuesta->cobrado) {
+            $respuesta->mensaje = "Se creo correctamente el comprobante";
+          }
+          $this->response->setStatusCode(201, 'Created');
+          $respuesta->data = Ventas::findFirst([
+            'conditions' => "Id = {$ven->Id}",
+          ]);
+        } else {
+          $msj = "No se pudo crear el nuevo registro: \n";
+          foreach ($ven->getMessages() as $m) {
+            $msj .= "{$m} \n";
+          }
+          $respuesta->mensaje = $msj;
+        }
+        //$this->db->commit();
+      } catch (Exception $ex) {
+        //$this->db->rollback();
+        $respuesta->mensaje = "Error: " . $ex->getMessage();
+      }
+    }
+    
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($respuesta));
+    $this->response->send();
+  }
   public function ventaGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
-
       $generarCA = $this->request->getQuery('generarCA', null, false);
       $autorizar = $this->request->getQuery('autorizar', null, false);
       $enviar = $this->request->getQuery('enviar', null, false);
@@ -426,6 +750,7 @@ class VentasController extends ControllerBase  {
             $datos->CERespuestaTipo = $res->secuencial;
           }
           $respVta = $this->guardarVentaNueva($datos, 0, false, $version);
+          $ret->res = $respVta->res;
           $ret->num = $respVta->ven->Numero;
           $ret->ven = $respVta->ven;
           $ret->cid = $respVta->ven->Id;
@@ -821,7 +1146,7 @@ class VentasController extends ControllerBase  {
       $ven = new Ventas();
       $ven->Numero = $num;
       $ven->Tipo = 11; // Factura
-      $ven->Fecha = new \DateTime();
+      $ven->Fecha = new DateTime();
       $ven->SucursalId = $datos->SucursalId;
       $ven->BodegaId = $datos->BodegaId;
       $ven->Plazo = 0;
@@ -1295,7 +1620,7 @@ class VentasController extends ControllerBase  {
   }
 
   private function codigoAleatorio() {
-    $f = new \DateTime();
+    $f = new DateTime();
     $h = $f->format("H");
     $t = $f->format("i");
     $s = $f->format("s");
@@ -1331,7 +1656,7 @@ class VentasController extends ControllerBase  {
     }
 
     // Clave de acceso
-    $fecha = new \DateTime();
+    $fecha = new DateTime();
     $codigoAleatorio = self::codigoAleatorio();
     if (strlen($codigoAleatorio) > 8) {
       $codigoAleatorio = substr($codigoAleatorio, -8);
@@ -1675,20 +2000,19 @@ class VentasController extends ControllerBase  {
     $condicionSucursal = '';
     $paramSucursal = [];
     if (true) {
-      $condicionSucursal = " AND SucursalId == :sucursal:";
+      $condicionSucursal = " AND SucursalId = :sucursal:"; // Nota: usa un solo "=" para la comparación SQL
       $paramSucursal = [ 'sucursal' => $sucursal ];
     }
-    
+
     // Vales de transferencia
     $sumaTransfers = CajaMovimientos::sum([
-      'column'     => 'Valor', //$empresa = Empresas::findFirstById($sucursal->EmpresaId);
-      'condition' => "Tipo = " . TRANSFERENCIA_CAJA . "{$condicionSucursal} AND CajaId == :caja: AND Estado == 0 AND Fecha BETWEEN :desde: AND :hasta:",
-      'bind' => [ 
-        'caja' => $caja,
+      'column'     => 'Valor',
+      'conditions' => "Tipo = " . TRANSFERENCIA_CAJA . "{$condicionSucursal} AND CajaId = :caja: AND Estado = 0 AND Fecha BETWEEN :desde: AND :hasta:",
+      'bind' => array_merge([
+        'caja'  => $caja,
         'desde' => $desde,
         'hasta' => $hasta,
-        ...$paramSucursal
-      ]
+      ], $paramSucursal)
     ]);
     if ($sumaTransfers > 0) {
       $result[] = [

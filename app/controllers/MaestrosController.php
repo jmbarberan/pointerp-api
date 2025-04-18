@@ -48,7 +48,7 @@ class MaestrosController extends ControllerBase  {
     $ced = $this->dispatcher->getParam('ced');
     $rows = Clientes::find([
       'conditions' => "{$filtroEmp} Identificacion = :ced: AND Estado != 2",
-      'bind' => [ 'ced' => $ced, ...$paramsEmp ]
+      'bind' => array_merge(['ced' => $ced], $paramsEmp)
     ]);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');

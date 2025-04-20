@@ -290,19 +290,19 @@ class VentasController extends ControllerBase  {
       'guardado' => false,
       'cobrado' => false,
       'mensaje' => 'Los datos no se pudieron procesar',
-      'data' => null
+      'data' => 0
     ];
     // buscar si ya existe
     $uuidString = $datos->UCodigo;
     $uuidBin = hex2bin(str_replace('-', '', $uuidString));
-    $ventaExiste = Ventas::findFirst([
+    $ventaExiste = VentasMin::findFirst([
       'conditions' => 'Identificador = :uuid:',
       'bind'       => [ 'uuid' => $uuidBin ]
     ]);
     //$this->db->begin();
     if ($ventaExiste) {
       $respuesta->existente = true;
-      $respuesta->data = $ventaExiste;
+      $respuesta->data = $ventaExiste->Id;
       $respuesta->mensaje = "La venta ya se encuentra registrada";
       $this->response->setStatusCode(409, 'Conflict');
     } else {
@@ -525,9 +525,7 @@ class VentasController extends ControllerBase  {
             $respuesta->mensaje = "Se creo correctamente el comprobante";
           }
           $this->response->setStatusCode(201, 'Created');
-          $respuesta->data = Ventas::findFirst([
-            'conditions' => "Id = {$ven->Id}",
-          ]);
+          $respuesta->data = $ven->Id;
         } else {
           $this->response->setStatusCode(500, 'Error');
           $msj = "No se pudo crear el nuevo registro: \n";
@@ -543,9 +541,9 @@ class VentasController extends ControllerBase  {
         $respuesta->mensaje = "Error: " . $ex->getMessage();
       }
     }
-    
+    $jsonResp = json_encode($respuesta);
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($respuesta));
+    $this->response->setContent($jsonResp);
     $this->response->send();
   }
   public function ventaGuardarAction() {

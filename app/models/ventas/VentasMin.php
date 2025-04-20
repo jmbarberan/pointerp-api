@@ -22,7 +22,7 @@ class VentasMin extends Modelo
   
   public function jsonSerialize () : array {
     $res = $this->toArray();
-        
+    $res['Identificador'] = '';     
     if ($this->relCliente != null) {   
       $res['relCliente'] = $this->relCliente->toUnicodeArray();
     }

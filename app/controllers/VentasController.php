@@ -296,7 +296,7 @@ class VentasController extends ControllerBase  {
     $uuidString = $datos->UCodigo;
     $uuidBin = hex2bin(str_replace('-', '', $uuidString));
     $ventaExiste = Ventas::findFirst([
-      'conditions' => 'identificador = :uuid:',
+      'conditions' => 'Identificador = :uuid:',
       'bind'       => [ 'uuid' => $uuidBin ]
     ]);
     //$this->db->begin();
@@ -341,6 +341,7 @@ class VentasController extends ControllerBase  {
         $ven->Comprobante = $datos->Comprobante;
         $ven->Contado = $datos->Abonos > 0 ? 1 : 0;
         $ven->Operador = $datos->Operador;
+        $ven->Identificador = $uuidBin;
         if ($ven->create()) {
           // Crear items
           foreach ($datos->relItems as $mi) {
@@ -502,7 +503,7 @@ class VentasController extends ControllerBase  {
                 ]);
                 $ven->Estado = 1;
                 $ven->Abonos = $cobrado;
-                $ven->update;
+                $ven->update();
               } else {
                 $msj = "No se pudo crear el nuevo Documento: " . "\n";
                 foreach ($doc->getMessages() as $m) {
@@ -528,6 +529,7 @@ class VentasController extends ControllerBase  {
             'conditions' => "Id = {$ven->Id}",
           ]);
         } else {
+          $this->response->setStatusCode(500, 'Error');
           $msj = "No se pudo crear el nuevo registro: \n";
           foreach ($ven->getMessages() as $m) {
             $msj .= "{$m} \n";
@@ -537,6 +539,7 @@ class VentasController extends ControllerBase  {
         //$this->db->commit();
       } catch (Exception $ex) {
         //$this->db->rollback();
+        $this->response->setStatusCode(500, 'Created');
         $respuesta->mensaje = "Error: " . $ex->getMessage();
       }
     }

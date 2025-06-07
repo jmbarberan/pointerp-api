@@ -3,8 +3,9 @@
 namespace Pointerp\Controladores;
 
 use Exception;
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Mvc\Model\Query;
+use Phalcon\Mvc\Model\Transaction\Manager as TransactionManager;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Productos;
 use Pointerp\Modelos\Maestros\ProductosImagenes;
@@ -14,15 +15,13 @@ use Pointerp\Modelos\Inventarios\Bodegas;
 use Pointerp\Modelos\Inventarios\Compras;
 use Pointerp\Modelos\Inventarios\ComprasItems;
 use Pointerp\Modelos\Inventarios\ComprasImpuestos;
-use Pointerp\Modelos\Inventarios\Kardex;
-use Pointerp\Modelos\Inventarios\Impuestos;
 use Pointerp\Modelos\Inventarios\Movimientos;
 use Pointerp\Modelos\Inventarios\MovimientosItems;
-use Pointerp\Modelos\Inventarios\Existencias;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\SubscripcionesEmpresas;
 use Pointerp\Modelos\EmpresaParametros;
 use Phalcon\Paginator\Adapter\Model as PaginatorModel;
+
 
 class InventariosController extends ControllerBase  {
 
@@ -689,25 +688,11 @@ class InventariosController extends ControllerBase  {
     $this->response->send();
   }
   
-  // TODO Traer la existencia desde la vista ExistenciaDatos
   public function exitenciasProductoAction() {    
-    $di = Di::getDefault();
     $id = $this->dispatcher->getParam('id');
     $bod = $this->dispatcher->getParam('bodega');
-    $condicion = 'e.ProductoId = ' . $id . ' ';
-    if ($bod > 0) {
-      $condicion .= 'AND e.BodegaId = ' . $bod . ' ';
-    }
     
-    $phql = 'Select e.ProductoId, e.BodegaId, b.Denominacion, SUM(e.Saldo) as Saldo 
-      from Pointerp\Modelos\Inventarios\Existencias e 
-      left join Pointerp\Modelos\Maestros\Productos p on e.ProductoId = p.Id
-      left join Pointerp\Modelos\Inventarios\Bodegas b on e.BodegaId = b.Id
-      Where ' . $condicion .
-      'group by ProductoId, BodegaId, Denominacion';    
-      
-    $qry = new Query($phql, $di);
-    $rws = $qry->execute();
+    $rws = $this->exisenciaProductoBodega($id, $bod);    
     
     //$rex = array_merge($res);
     if (count($rws) > 0) {
@@ -724,19 +709,18 @@ class InventariosController extends ControllerBase  {
     $di = Di::getDefault();
     $bod = $this->dispatcher->getParam('bodega');
     $zeros = $this->dispatcher->getParam('zeros');
-    $condicion = 'e.BodegaId = ' . $bod . ' ';
     
     $phql = 'Select e.BodegaId, e.ProductoId, p.Nombre, p.Codigo, p.Medida, SUM(e.Saldo) as Saldo 
       from Pointerp\Modelos\Inventarios\Existencias e 
       left join Pointerp\Modelos\Maestros\Productos p on e.ProductoId = p.Id
-      Where ' . $condicion .
+      Where e.BodegaId = :bod:' .
       'group by BodegaId, ProductoId, Nombre, Codigo, Medida';
     if ($zeros == 0) {
         $phql .= ' HAVING Saldo != 0';
     }
       
     $qry = new Query($phql, $di);
-    $rws = $qry->execute();
+    $rws = $qry->execute(['bod' => $bod]);
     $res = [];
 
     foreach ($rws as $exis) {
@@ -782,6 +766,25 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
+
+  private function exisenciaProductoBodega($prd, $bod) {
+    $params = [ 'prd' => $prd ];
+    $andCondition = '';
+    if ($bod != 0) {
+      $andCondition = 'AND e.BodegaId = :bod: ';
+      $params['bod'] = $bod;
+    }
+    $phql = 'Select e.ProductoId, e.BodegaId, b.Denominacion, SUM(e.Saldo) as Saldo 
+      from Pointerp\Modelos\Inventarios\Existencias e 
+      left join Pointerp\Modelos\Maestros\Productos p on e.ProductoId = p.Id
+      left join Pointerp\Modelos\Inventarios\Bodegas b on e.BodegaId = b.Id
+      Where e.ProductoId = :prd: ' . $andCondition .
+      'group by ProductoId, BodegaId, Denominacion';    
+      
+    $qry = new Query($phql, Di::getDefault());
+    return $qry->execute($params);
+  }
+
   #endregion
 
   #region MOVIMIENTOS
@@ -798,7 +801,7 @@ class InventariosController extends ControllerBase  {
     $condicion = "Tipo = " . $tipoMov . " AND ";
     $res = [];
     if ($clase < 2) {
-      $condicion .= "Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . "'";      
+      $condicion .= "Fecha >= '" . $desde . "' AND Fecha <= '" . $hasta . " 23:59:59'";      
     } else {
       if (strlen($filtro) > 0) {
         if ($clase == 2) {
@@ -835,7 +838,6 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
-
   public function movimientoGuardarAction() {
     try {
       $datos = $this->request->getJsonRawBody();
@@ -1041,7 +1043,6 @@ class InventariosController extends ControllerBase  {
     $this->response->setContent(json_encode($res));
     $this->response->send();
   }
-
   public function movimientoModificarEstadoAction() {
     $id = $this->dispatcher->getParam('id');
     $est = $this->dispatcher->getParam('estado');
@@ -1064,6 +1065,142 @@ class InventariosController extends ControllerBase  {
     }
     $this->response->setContentType('application/json', 'UTF-8');
     $this->response->setContent(json_encode($msj));
+    $this->response->send();
+  }
+
+  public function ajustarExistenciasFisicoAction() {
+    $respuesta = (object) [
+      'result' => false,
+      'mensaje' => "La operacion no se pudo ejecutar correctamente",
+      'data' => null,
+    ];
+    $this->view->disable();
+    $fisicoId = $this->dispatcher->getParam('id'); // $params->id;
+
+    $movFisico = Movimientos::findFirstById($fisicoId);
+    if ($movFisico == false) {
+      $respuesta->mensaje = "No se encontro el inventario fisico";
+      $this->response->setStatusCode(404, 'Not found');
+      $this->response->setContentType('application/json', 'UTF-8');
+      $this->response->setContent(json_encode($respuesta));
+      $this->response->send();
+      return;
+    } else {
+      if ($movFisico->Estado == 1) {
+        $respuesta->mensaje = "El Inventario fisico ya fue ajustado";
+        $this->response->setStatusCode(422, 'Invalid');
+        $this->response->setContentType('application/json', 'UTF-8');
+        $this->response->setContent(json_encode($respuesta));
+        $this->response->send();
+        return;
+      }
+    }
+    $itemsAjustar = MovimientosItems::find(['conditions' => "KardexId = $fisicoId"]);
+    $itemsSobrantes = [];
+    $itemsFaltantes = [];
+    foreach ($itemsAjustar as $item) {
+      $prdExistencia = 0;
+      $rwExiste = $this->exisenciaProductoBodega($item->ProductoId, $movFisico->BodegaId);
+      if ($rwExiste->count() > 0) {
+        $prdExistencia = $rwExiste[0]->Saldo;
+      }
+      $prd = (object) [
+        'id' => $item->ProductoId,
+        'cantidad' => 0
+      ];
+      if ($prdExistencia < $item->Cantidad) {
+        $prd->cantidad = $item->Cantidad - $prdExistencia;
+        $itemsSobrantes[] = $prd;
+      } else {
+        if ($prdExistencia != $item->Cantidad) {
+          $prd->cantidad = $prdExistencia - $item->Cantidad;
+          $itemsFaltantes[] = $prd;
+        }
+      }
+    }
+
+    try {
+      $manager = new TransactionManager();
+      $transaction = $manager->get();
+      $completa = true;
+      if (count($itemsSobrantes) > 0) {      
+        $movAjusteSobrantes = new Movimientos();
+        $movAjusteSobrantes->BodegaId = $movFisico->BodegaId;
+        $movAjusteSobrantes->SucursalId = $movFisico->SucursalId;
+        $movAjusteSobrantes->Fecha = date('Y-m-d H:i:s');      
+        $movAjusteSobrantes->Tipo = 9;
+        $movAjusteSobrantes->Numero = $this->ultimoNumeroMovimiento($movAjusteSobrantes->Tipo, $movFisico->SucursalId) + 1;
+        $movAjusteSobrantes->Estado = 0;
+        $movAjusteSobrantes->Concepto = 0;
+        $movAjusteSobrantes->Referencia = 0;
+        $movAjusteSobrantes->Descripcion = "Ajuste de sobrantes de existencias fisico # {$movFisico->Numero}";
+        if ($movAjusteSobrantes->save()) {
+          foreach ($itemsSobrantes as $item) {
+            $itemSobrante = new MovimientosItems();
+            $itemSobrante->KardexId = $movAjusteSobrantes->Id;
+            $itemSobrante->ProductoId = $item->id;
+            $itemSobrante->Cantidad = $item->cantidad;
+            $itemSobrante->Costo = 0;
+            if (!$itemSobrante->save()) {
+              $completa = false;
+              $transaction->rollback();
+            }
+          }
+        } else {
+          $completa = false;
+          $transaction->rollback();
+        }
+      }
+
+      if (count($itemsFaltantes) > 0) {
+        $movAjusteFaltantes = new Movimientos();
+        $movAjusteFaltantes->BodegaId = $movFisico->BodegaId;
+        $movAjusteFaltantes->SucursalId = $movFisico->SucursalId;
+        $movAjusteFaltantes->Fecha = date('Y-m-d H:i:s');
+        $movAjusteFaltantes->Tipo = 10;
+        $movAjusteFaltantes->Numero = $this->ultimoNumeroMovimiento($movAjusteFaltantes->Tipo, $movFisico->SucursalId) + 1;
+        $movAjusteFaltantes->Estado = 0;
+        $movAjusteFaltantes->Concepto = 0;
+        $movAjusteFaltantes->Referencia = 0;
+        $movAjusteFaltantes->Descripcion = "Ajuste de faltantes de existencias fisico # {$movFisico->Numero}";
+        if ($movAjusteFaltantes->save()) {
+          foreach ($itemsFaltantes as $item) {
+            $itemFaltante = new MovimientosItems();
+            $itemFaltante->KardexId = $movAjusteFaltantes->Id;
+            $itemFaltante->ProductoId = $item->id;
+            $itemFaltante->Cantidad = $item->cantidad;
+            $itemFaltante->Costo = 0;
+            if (!$itemFaltante->save()) {
+              $completa = false;
+              $transaction->rollback();
+            }
+          }
+        } else {
+          $completa = false;
+          $transaction->rollback();
+        }
+      }
+
+      if ($completa)
+      {
+        $movFisico->Estado = 1;
+        if ($movFisico->save()) {
+          $transaction->commit();
+          $this->response->setStatusCode(201, 'Ok');
+          $respuesta->result = true;
+          $respuesta->mensaje = "El inventario fisico fue ajustado exitosamente";
+        } else {
+          $transaction->rollback();
+        }
+      }
+    } catch (Exception $e) {
+      $this->response->setStatusCode(500, 'Error');
+      $respuesta->mensaje = "Se produjo un error al intentar ajustar";
+      $respuesta->data = $e->getMessage();
+    }
+
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($respuesta));
     $this->response->send();
   }
   #endregion

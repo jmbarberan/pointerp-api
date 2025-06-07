@@ -4,7 +4,7 @@ use Phalcon\Http\Request;
 defined('BASE_PATH') || define('BASE_PATH', getenv('BASE_PATH') ?: realpath(dirname(__FILE__) . '/../..'));
 defined('APP_PATH') || define('APP_PATH', BASE_PATH . '/app');
 
-return new \Phalcon\Config([
+return new \Phalcon\Config\Config([
     'dbfallback' => [
         'adapter'     => 'Mysql',
         'host'        => getenv('DB_HOST'),

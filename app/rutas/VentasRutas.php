@@ -75,5 +75,41 @@ class VentasRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'ventasDiarioCE',
     ]);
+    $this->addGet('/cajas/empresa/{empresa}/estado/{estado}', [
+      'controller' => $controlador,
+      'action'     => 'cajasPorEstado',
+    ]);
+    $this->addGet('/cajas/estado/{estado}', [
+      'controller' => $controlador,
+      'action'     => 'cajasPorEstado',
+    ]);
+    $this->addGet('/cajas/empresa/{empresa}/usuario/{usuario}', [
+      'controller' => $controlador,
+      'action'     => 'cajasPorUsuario',
+    ]);
+    $this->addPost('/cajas/guardar', [
+      'controller' => $controlador,
+      'action'     => 'cajaGuardar',
+    ]);
+    $this->addPut('/cajas/{id}/modificar/estado/{estado}', [
+      'controller' => $controlador,
+      'action'     => 'cajaModificarEstado',
+    ]);
+    $this->addGet('/cajas/movimientos/sucursal/{sucursal}/clase/{clase}/estado/{estado}/desde/{desde}/hasta/{hasta}/tipo/{tipo}/filtro/{filtro}/buscar', [
+      'controller' => $controlador,
+      'action'     => 'valesBuscar',
+    ]);
+    $this->addPost('/cajas/movimientos/guardar', [
+      'controller' => $controlador,
+      'action'     => 'valeGuardar',
+    ]);
+    $this->addPut('/cajas/movimientos/{id}/modificar/estado/{estado}', [
+      'controller' => $controlador,
+      'action'     => 'valeModificarEstado',
+    ]);
+    $this->addGet('/cajas/{caja}/sucursal/{sucursal}/movimientos/desde/{desde}/hasta/{hasta}/cuadre', [
+      'controller' => $controlador,
+      'action'     => 'cuadreCajaMovimientos',
+    ]);
   }
 }

@@ -4,7 +4,7 @@ namespace Pointerp\Controladores;
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Maestros\Clientes;
@@ -37,12 +37,12 @@ class FirmaElectronicaController extends ControllerBase  {
     $venta = Ventas::findFirst($ventaId);
     $respEnvio = $this->enviarCorreoComprobante($venta);
     $ret = (object) [
-			'res' => $respEnvio->res,
-			'cid' => $respEnvio->cid,
-			'msj' => $respEnvio->msj,
-			'det' => $respEnvio->det,
-		];
-		$codMsg = "Ok";
+		'res' => $respEnvio->res,
+		'cid' => $respEnvio->cid,
+		'msj' => $respEnvio->msj,
+		'det' => $respEnvio->det,
+	];
+	$codMsg = "Ok";
     if ($respEnvio->cod == 500) {
 			$codMsg = "Error";
 		} elseif ($respEnvio->cod == 404) {

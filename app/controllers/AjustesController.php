@@ -2,18 +2,13 @@
 
 namespace Pointerp\Controladores;
 
-use Phalcon\Di;
-use Phalcon\Mvc\Model\Query;
+use Phalcon\Di\Di;
 use Pointerp\Modelos\EmpresaClaves;
 use Pointerp\Modelos\EmpresaParametros;
 use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Sucursales;
 use Pointerp\Modelos\Empresas;
 use Pointerp\Modelos\Reportes;
-
-use Phalcon\Db;
-use Phalcon\Db\Exception;
-use Phalcon\Db\Adapter\Pdo\Postgresql as PgConnection;
 
 class AjustesController extends ControllerBase  {
 

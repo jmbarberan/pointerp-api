@@ -2,7 +2,7 @@
 
 namespace Pointerp\Controladores;
 
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Mvc\Model\Query;
 //use Pointerp\Modelos\Maestros\Registros;
 use Pointerp\Modelos\Subscripciones;

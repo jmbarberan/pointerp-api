@@ -4,9 +4,13 @@ namespace Pointerp\Controladores;
 
 use DateTime;
 use Exception;
-use Phalcon\Di;
+//use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Mvc\Model\Query;
+//use Phalcon\Paginator\Adapter\NativeArray;
+//use Phalcon\Paginator\Adapter\QueryBuilder;
 use Pointerp\Modelos\Inventarios\Kardex;
+use Pointerp\Modelos\Maestros\ClientesMin;
 use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\Maestros\ProductosImposiciones;
 use Pointerp\Modelos\Ventas\CajaMovimientos;
@@ -25,6 +29,7 @@ use Pointerp\Modelos\Maestros\Clientes;
 use Pointerp\Modelos\Sucursales;
 use Phalcon\Paginator\Adapter\Model as PaginatorModel;
 use Phalcon\Paginator\Adapter\QueryBuilder as PagQueryBuilder;
+//use Pointerp\Modelos\Ventas\VentasNano;
 
 class VentasController extends ControllerBase  {
 
@@ -37,8 +42,13 @@ class VentasController extends ControllerBase  {
     $estado = $this->dispatcher->getParam('estado');
     $clase = $this->dispatcher->getParam('clase');
     $desde = $this->dispatcher->getParam('desde');
-    $hasta = $this->dispatcher->getParam('hasta');    
-    $condicion = "SucursalId = {$suc}";
+    $hasta = $this->dispatcher->getParam('hasta');
+    $nsModelPrefix = ""; // "[Pointerp\Modelos\Ventas\VentasNano].";
+    $condicion = "SucursalId = :suc:";
+    $bindParams = [ 'suc' => intval($suc) ];
+    $bindTypes = [
+            'suc' => \PDO::PARAM_INT,
+    ];
     try {
       $page = $this->request->getQuery('page', null, 0);
       $limit = $this->request->getQuery('limit', null, 0);
@@ -52,11 +62,18 @@ class VentasController extends ControllerBase  {
       $orderDir = '';
       $vtaType = '11';
     }
-    $condicion .= " AND Tipo in ({$vtaType})";
-    $res = [];
+    if (intval($vtaType) > 0) {
+      $condicion .= " AND Tipo = :tipo:";
+      $bindParams['tipo'] = intval($vtaType);
+      $bindTypes['tipo'] = \PDO::PARAM_INT;
+    }
     if ($clase < 3) {
       if ($clase <= 1) {
-        $condicion .= " AND Fecha >= '{$desde}' AND Fecha <= '{$hasta}'";
+        $condicion .= " AND Fecha >= :desde: AND Fecha <= :hasta:";
+        $bindParams['desde'] = $desde;
+        $bindParams['hasta'] = $hasta;
+        $bindTypes['desde'] = \PDO::PARAM_STR;
+        $bindTypes['hasta'] = \PDO::PARAM_STR;
       } else {
         if (strlen($filtro) > 1) {
           if ($clase == 2) {
@@ -70,18 +87,22 @@ class VentasController extends ControllerBase  {
               $filtro = '%' . str_replace(' ' , '%',$filtroSP) . '%';
             }
           }
-          $condicion .= " AND `Notas` like '{$filtro}'";
+          $condicion .= " AND [Notas] LIKE :filtro:";
+          $bindParams['filtro'] = $filtro;
+          $bindTypes['filtro'] = \PDO::PARAM_STR;
         }
       }
     } else {
-      $condicion .= $clase == 4 ? " AND ClienteId = {$filtro}" : " AND Numero = {$filtro}";
+      $condicion .= $clase == 4 ? " AND ClienteId = :filtro:" : " AND Numero = :filtro:";
+      $bindParams['filtro'] = intval($filtro);
+      $bindTypes['filtro'] = \PDO::PARAM_INT;
     }
 
     if ($estado == 0) {
       if (strlen($condicion) > 0) {
-        $condicion .= ' AND Estado = 0';
+        $condicion .= " AND Estado = 0";
       } else {
-        $condicion = 'Estado = 0';
+        $condicion = "Estado = 0";
       }
     }
 
@@ -89,38 +110,32 @@ class VentasController extends ControllerBase  {
     $sales = [];
     if ($page > 0 && $limit > 0) {
       $builder = $this->modelsManager->createBuilder()
-                ->columns("Id")
-                ->from(Ventas::class)
-                ->where($condicion)
-                ->orderBy("Numero");
+        ->from(Ventas::class)
+        ->columns(['Id', 'Numero', 'Fecha', 'ClienteId', 'Subtotal', 'Recargo', 
+          'Flete', 'Impuestos', 'Estado', 'BodegaId', 'SucursalId', '[Notas]'])
+        ->where($condicion, $bindParams, $bindTypes)
+        ->orderBy(($order ?? 'Numero') . ' ' . ($orderDir ?? 'ASC'));
+      
       $paginator = new PagQueryBuilder([
-        'builder' => $builder,
-        'limit'   => $limit,
-        'page'    => $page
+          'builder' => $builder,
+          'limit'   => $limit,
+          'page'    => $page,
       ]);
-      $resultado = [];
-      $totalItems = 0;
-      $completo = false;
-      try {
-        $completo = true;
-        $pageData = $paginator->paginate();
-        if (isset($pageData)) {
-          foreach ($pageData->items as $venta) {
-            $resultado[] = VentasMin::findFirst($venta->Id)->jsonSerialize();
-          }
-          $totalItems = $pageData->getTotalItems();  
-        }
-      } catch (Exception $ex) {
-        //$m = $ex->getMessage();
+      $pageData = $paginator->paginate();
+      $comprobantes = [];
+      foreach ($pageData->getItems() as $venta) {
+        $clienteId = $venta->ClienteId;
+        $venta->relCliente = Clientes::findFirst($clienteId);
+        $comprobantes[] = $venta; 
       }
       
       $sales = (object) [
-        'completo' => $completo,
-        'total' => $totalItems,
-        'items' => $resultado
+        'completo' => true,
+        'total' => $pageData->getTotalItems(),
+        'items' => $comprobantes
       ];
       $jsonSales = json_encode($sales);
-      $hasData = $totalItems > 0;
+      $hasData = count($comprobantes) > 0;
     } else {
       $sales = Ventas::find([
         'conditions' => $condicion,
@@ -363,7 +378,7 @@ class VentasController extends ControllerBase  {
               if ($version == 4) {
                 if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) > 0) {
                   $mi->relProducto->relImposiciones = ProductosImposiciones::find([
-                    "conditions" => "ProductoId = ${$mi->ProductoId}"
+                    "conditions" => "ProductoId = {$mi->ProductoId}"
                   ]);
                 }
                 foreach ($mi->relProducto->relImposiciones as $imps)
@@ -554,8 +569,12 @@ class VentasController extends ControllerBase  {
       $enviar = $this->request->getQuery('enviar', null, false);
       try {
         $version = $this->request->getQuery('version', null, 4);
+        $caja = $this->request->getQuery('caja', null, 0);
+        $cajero = $this->request->getQuery('cajero', null, 0);
       } catch (Exception $ex) {
         $version = 4;
+        $caja = 0;
+        $cajero = 0;
       }
       $autorizar = $autorizar === 'true';
       $enviar = $enviar === 'true';
@@ -754,9 +773,64 @@ class VentasController extends ControllerBase  {
           $ret->res = $respVta->res;
           $ret->num = $respVta->ven->Numero;
           $ret->ven = $respVta->ven;
-          $ret->cid = $respVta->ven->Id;
+          $ret->cid = $respVta->ven->Id;          
           $ret->msj = "Factura guardada exitosamente";
           if ($respVta->res) {
+            if ($caja > 0 && $cajero > 0) {
+              $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
+              $vta = $respVta->ven;
+              $cobroNum = $this->ultimoNumeroCobro(16, $datos->SucursalId) + 1;
+              $cobro = new Comprobantes();
+              $cobro->Tipo = 16; // (int)EntidadesEnum.EnCobro
+              $cobro->Fecha = date_format(new DateTime(),"Y-m-d H:i:s");
+              $cobro->Total = $cobrado;
+              $cobro->SucursalId = $datos->SucursalId;
+              $cobro->Especie = 0;
+              $cobro->Numero = $cobroNum;
+              $cobro->UsuarioId = $cajero;
+              $cobro->Estado = 0;
+              if ($cobro->create()) {
+                $doc = new ComprobanteDocumentos();
+                if ($vta->Tipo == 47) { // (int)EntidadesEnum.EnPedido
+                  $doc->Concepto = 52; // (int)EntidadesEnum.EnAbonosEfectivo
+                  $doc->Notas = "Abono a pedido reservado";
+                } else {
+                  $doc->Notas = "Cobro de venta de contado";
+                }
+                $doc->ComprobanteId = $cobro->Id;
+                $doc->Origen = $vta->Tipo;
+                $doc->Referencia = $vta->Id;
+                $doc->Rebajas = $cobrado;
+                $doc->Recargos = 0;
+                $doc->Soporte = 0;
+                if($doc->create()) {
+                  $cobitem = new ComprobanteItems();
+                  $cobitem->ComprobanteId = $cobro->Id;
+                  $cobitem->Numero = $caja; // id de la caja
+                  $cobitem->Fecha = date_format(new DateTime(),"Y-m-d H:i:s");
+                  $cobitem->Cuenta = " ";
+                  $cobitem->Autorizacion = " ";
+                  $cobitem->Nombres = " ";
+                  $cobitem->Codigo = " ";
+                  $cobitem->Valor = $cobrado;
+                  $cobitem->Descripcion = "";
+                  $cobitem->Origen = 35; // (int)EntidadesEnum.EnCobroEfectivo
+                  if(!$cobitem->create()) {
+                    $msj = "No se pudo crear el nuevo Item de cobro: " . "\n";
+                    foreach ($cobitem->getMessages() as $m) {
+                      $msj .= "{$m}\n";
+                    }
+                    $ret->msj = $msj;
+                  }
+                } else {
+                  $msj = "No se pudo crear el registro de Documento cobrado: " . "\n";
+                  foreach ($doc->getMessages() as $m) {
+                    $msj .= "{$m}\n";
+                  }
+                  $ret->msj = $msj;
+                }
+              }
+            }
             if ($autorizar) {
               require_once APP_PATH . '/library/ComprobantesElectronicos.php';
               try {
@@ -965,7 +1039,7 @@ class VentasController extends ControllerBase  {
         }
       } else {
         $ret->res = true;
-        $ret->msj = "Se creo correctamente el comprobante, pero no se pudo registrar el cobro";
+        $ret->msj = "No se pudo crear el comprobante ni el cobro";
       }
     } else {
       $ret->msj = "El documento ya se encuentra registrado";
@@ -1362,10 +1436,12 @@ class VentasController extends ControllerBase  {
             $ins->create();
             if ($datos->Tipo == FACTURA) {
               if ($version == 4) {
-                if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) > 0) {
-                  $mi->relProducto->relImposiciones = ProductosImposiciones::find([
-                    "conditions" => "ProductoId = ${$mi->ProductoId}"
+                if (!isset($mi->relProducto->relImposiciones) || count($mi->relProducto->relImposiciones) <= 0) {
+                  $prdId = intval($mi->ProductoId);
+                  $dataImpos = ProductosImposiciones::find([
+                    "conditions" => "ProductoId = {$prdId}"
                   ]);
+                  $mi->relProducto->relImposiciones = $dataImpos;
                 }
                 foreach ($mi->relProducto->relImposiciones as $imps)
                 {
@@ -1721,13 +1797,15 @@ class VentasController extends ControllerBase  {
   public function cajasPorEstadoAction() {
     $this->view->disable();
     $estado = $this->dispatcher->getParam('estado');
-    $condiciones = '';
+    $empresa = $this->dispatcher->getParam('empresa');
+    $condiciones = 'EmpresaId = :empresa:';
     if ($estado == 0) {
-      $condiciones = 'Estado = 0';
+      $condiciones = " AND Estado = 0";
     }
 
     $rows = Cajas::find([
       'conditions' => $condiciones,
+      'bind' => ['empresa' => $empresa]
     ]);
     if ($rows->count() > 0) {
       $this->response->setStatusCode(200, 'Ok');
@@ -1873,39 +1951,44 @@ class VentasController extends ControllerBase  {
       $params = array_merge([ 'filtro' => $filtro ], $params);
     }
 
-    if (strlen($condicion) > 0) {
-      $condicion .= ' AND Estado = 0';
+    if ($estado == 0) {
+      $condicion .= ' AND Estado = 0'; 
+    }
+    $conteo = 0;
+    if ($page > 0 && $limit > 0) {
+      $paginator = new PaginatorModel([
+        "model"      => CajaMovimientos::class,
+        "parameters" => [
+          'conditions' => $condicion,
+          'bind' => $params,
+          'order' => ($order ?? 'Fecha') . " {$orderDir}"
+        ],
+        "limit"      => $limit,
+        "page"       => $page,
+      ]);
+      $pageData = $paginator->paginate();
+      $conteo = $pageData->getItems()->count();
+      $res = (object) [
+        'completo' => true,
+        'total' => $pageData->getTotalItems(),
+        'items' => $pageData->getItems()
+      ];
+    } else {
       $res = CajaMovimientos::find([
         'conditions' => $condicion,
         'bind' => $params,
         'order' => 'Fecha'
       ]);
+      $conteo = $res->count();
     }
 
-    $paginator = new PaginatorModel([
-      "model"      => CajaMovimientos::class,
-      "parameters" => [
-        'conditions' => $condicion,
-        'bind' => $params,
-        'order' => ($order ?? 'Fecha') . " {$orderDir}"
-      ],
-      "limit"      => $limit,
-      "page"       => $page,
-    ]);
-    $pageData = $paginator->paginate();
-    $vales = (object) [
-      'completo' => true,
-      'total' => $pageData->getTotalItems(),
-      'items' => $pageData->getItems()
-    ];
-
-    if ($pageData->getTotalItems() > 0) {
+    if ($conteo > 0) {
         $this->response->setStatusCode(200, 'Ok');
     } else {
         $this->response->setStatusCode(404, 'Not found');
     }
     $this->response->setContentType('application/json', 'UTF-8');
-    $this->response->setContent(json_encode($vales));
+    $this->response->setContent(json_encode($res));
     $this->response->send();
   }
 
@@ -1917,22 +2000,27 @@ class VentasController extends ControllerBase  {
       'msj' => 'Los datos no se pudieron procesar'
     ];
     try {
-      $newCaja = new Cajas();
+      $newVale = new CajaMovimientos();
       if ($datos->Id > 0) {
-        $newCaja = Cajas::findFirstById($datos->Id);
+        $newVale = CajaMovimientos::findFirstById($datos->Id);
       }
-      $newCaja->Codigo = $datos->Codigo;
-      $newCaja->Descripcion = $datos->Descripcion;
-      $newCaja->Saldo = $datos->Saldo;
-      $newCaja->Cierre = $datos->Cierre;
-      $newCaja->Estado = $datos->Estado;
-      $newCaja->EmpresaId = $datos->EmpresaId;
-      $newCaja->Referencia = $datos->Referencia;
+      $newVale->SucursalId = $datos->SucursalId;
+      $newVale->Fecha = $datos->Fecha;
+      $newVale->CajaId = $datos->CajaId;
+      $newVale->Tipo = $datos->Tipo;
+      $newVale->Numero = $datos->Numero;
+      $newVale->Notas = $datos->Notas;
+      $newVale->Valor = $datos->Valor;
+      $newVale->UsuarioId = $datos->UsuarioId;
+      $newVale->Recibe = $datos->Recibe;
+      $newVale->Categoria = $datos->Categoria;
+      $newVale->Estado = $datos->Estado;
+      
       if ($datos->Id > 0) {
-        if (!$newCaja->update()) {
+        if (!$newVale->update()) {
           $this->response->setStatusCode(500, 'Error');  
-          $msj = "No se pudo guadar la caja: " . "\n";
-          foreach ($newCaja->getMessages() as $m) {
+          $msj = "No se pudo guadar la transaccion: " . "\n";
+          foreach ($newVale->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->res = false;
@@ -1940,10 +2028,10 @@ class VentasController extends ControllerBase  {
           $ret->msj = $msj;
         }
       } else {
-        if (!$newCaja->create()) {
+        if (!$newVale->create()) {
           $this->response->setStatusCode(500, 'Error');  
-          $msj = "No se pudo crear la nueva caja: " . "\n";
-          foreach ($newCaja->getMessages() as $m) {
+          $msj = "No se pudo crear la nueva transaccion: " . "\n";
+          foreach ($newVale->getMessages() as $m) {
             $msj .= $m . "\n";
           }
           $ret->res = false;
@@ -1978,10 +2066,10 @@ class VentasController extends ControllerBase  {
         $result->mensaje = "Registro actualizado exitósamente";
         $this->response->setStatusCode(201, 'Ok');
       } else {
-        $result->mensaje = "Error al intentar modificar el vale";
+        $result->mensaje = "Error al intentar modificar la transaccion";
       }
     } else {
-      $result->mensaje = "No se encontró el vale";
+      $result->mensaje = "No se encontró la transaccion";
       $this->response->setStatusCode(404, 'Not found');
     }
 
@@ -2001,7 +2089,7 @@ class VentasController extends ControllerBase  {
     $condicionSucursal = '';
     $paramSucursal = [];
     if (true) {
-      $condicionSucursal = " AND SucursalId = :sucursal:"; // Nota: usa un solo "=" para la comparación SQL
+      $condicionSucursal = " AND SucursalId = :sucursal:";
       $paramSucursal = [ 'sucursal' => $sucursal ];
     }
 
@@ -2138,6 +2226,36 @@ class VentasController extends ControllerBase  {
     }
 
     return $result;
+  }
+
+  public function cajasPorUsuarioAction() {
+    $this->view->disable();
+    $usuario = $this->dispatcher->getParam('usuario');
+    $empresa = $this->dispatcher->getParam('empresa');
+    $registros = Registros::find([
+      'conditions' => 'TablaId = 9 AND Indice = :usuario:',
+      'bind' => ['usuario' => $usuario]
+    ]);
+    $cajas = [];
+    if ($registros->count() > 0) {
+      foreach ($registros as $item) {
+        $cajaUsuario = Cajas::findFirst([
+          'conditions' => 'Id = :caja: AND EmpresaId = :empresa:',
+          'bind' => ['caja' => $item->Contenedor, 'empresa' => $empresa ]
+        ]);
+        if ($cajaUsuario) {
+          $cajas[] = $cajaUsuario;
+        }
+      }
+    }
+    if (count($cajas) > 0) {
+      $this->response->setStatusCode(200, 'Ok');
+    } else {
+      $this->response->setStatusCode(404, 'Not found');
+    }
+    $this->response->setContentType('application/json');
+    $this->response->setContent(json_encode($cajas));
+    $this->response->send();
   }
 
   /*public IEnumerable<CuadreCajaItem> CuadreCajaMovimientos(int pCaja, DateTime pFini, DateTime pFcor, int psuc, bool referenciales)

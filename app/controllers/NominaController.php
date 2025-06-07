@@ -3,7 +3,7 @@
 namespace Pointerp\Controladores;
 
 use Exception;
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\Nomina\Registros;
 use Pointerp\Modelos\Nomina\Cargos;

@@ -6,6 +6,7 @@ use Pointerp\Modelos\Maestros\Impuestos;
 use Pointerp\Modelos\Maestros\Registros;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use Pointerp\Modelos\SubscripcionesEmpresas;
 //use Dompdf\Dompdf;
 
 require(APP_PATH . '/library/CryptoToolKit/CryptoToolKitInterface.php');
@@ -48,7 +49,7 @@ class ComprobantesElectronicos {
     $xmlFactura = self::crearXmlFactura($comprobante);
     if (isset($xmlFactura)) {
       $type = 'http://uri.etsi.org/01903/v1.3.2#';
-      $crypto = new OpenSSL(BASE_PATH . '\\certs\\' . self::$certificado, self::$password, "PKCS12");
+      $crypto = new OpenSSL(BASE_PATH . DIRECTORY_SEPARATOR . 'certs' . DIRECTORY_SEPARATOR . self::$certificado, self::$password, "PKCS12");
       $xmlsec = new XMLSecLibs();
       $options = ['timezone' => 'America/Guayaquil'];
       $xmlsec->setDigestMethod('http://www.w3.org/2001/04/xmlenc#sha256');
@@ -368,17 +369,21 @@ class ComprobantesElectronicos {
       "mensaje" => "Operacion incompleta",
       "data" => null
     ];
-    
+    $subscripcion = $config->entorno->subscripcion;
+    $empData = SubscripcionesEmpresas::findFirst([
+      'conditions' => 'subscripcion_id = :sub: AND empresa_id = :emp:',
+      'bind' => [ 'sub' => $subscripcion, 'emp' => $venta->relSucursal->EmpresaId ]
+    ]);
     $mail = new PHPMailer(true);
     try {
       $mail->isSMTP();
-      $mail->Host       = 'smtp.gmail.com';
+      $mail->Host       = $empData->email_host;
       $mail->SMTPAuth   = true;
-      $mail->Username   = $config->Email;
-      $mail->Password   = $config->Password;
+      $mail->Username   = $empData->email_user;
+      $mail->Password   = $empData->email_pass;
       $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-      $mail->Port       = 587;
-      $mail->setFrom($config->Email, $config->Empresa);
+      $mail->Port       = $empData->email_port;
+      $mail->setFrom($empData->email_dir, $config->Empresa);
       $mail->addAddress($venta->relCliente->Email, $venta->relCliente->Nombres);
       $mail->isHTML(true);
       $mail->Subject = 'Comprobante Electronico emitido';

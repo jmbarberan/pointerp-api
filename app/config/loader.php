@@ -1,6 +1,8 @@
 <?php
 
-$loader = new \Phalcon\Loader();
+use Phalcon\Autoload\Loader;
+
+$loader = new Loader();
 
 $dirs = [
     $config->application->controllersDir,
@@ -29,9 +31,9 @@ $names = [
 /**
  * Se registran los directorios y nombres tomados del archivo de configuracion
  */
-$loader->registerDirs($dirs);
-$loader->registerNamespaces($names, true);
-$loader->registerFiles([
+$loader->setDirectories($dirs);
+$loader->setNamespaces($names, true);
+/*$loader->registerFiles([
     APP_PATH . '/../../vendor/autoload.php'
-]);
+]);*/
 $loader->register();

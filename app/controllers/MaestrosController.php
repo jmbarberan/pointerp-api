@@ -4,7 +4,7 @@
 namespace Pointerp\Controladores;
 
 use Exception;
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Mvc\Model\Query;
 use Pointerp\Modelos\ClientesSri;
 use Pointerp\Modelos\Maestros\Impuestos;

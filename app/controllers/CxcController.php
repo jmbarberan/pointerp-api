@@ -2,8 +2,7 @@
 
 namespace Pointerp\Controladores;
 
-use Phalcon\Di;
-use Phalcon\Mvc\Model\Query;
+use Phalcon\Di\Di;
 use Pointerp\Modelos\Ventas\VentasMin;
 use Pointerp\Modelos\Cxc\Transacciones;
 

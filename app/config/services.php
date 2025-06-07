@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 use Library\Listener\PreFlightListener;
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Escaper;
 use Phalcon\Events\Manager;
 use Phalcon\Flash\Direct as Flash;
@@ -18,7 +18,6 @@ use Phalcon\Url as UrlResolver;
 use Phalcon\Http\Request;
 use Phalcon\Db\Adapter\Pdo\Postgresql as PgConnection;
 
-$di = Di::getDefault();
 
 $di->set('preflight', function() {
     return new PreFlightListener();

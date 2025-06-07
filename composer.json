@@ -8,18 +8,16 @@
         }
       ],
     "require": {
-		"php": "^7.3.3",
-		"ext-psr": "*",
-		"ext-mbstring": "*",
-		"ext-json": "*",
-		"ext-curl": "*",
-		"ext-gettext": "*",
-		"phalcon/cphalcon": "^3.4",
-		"ext-phalcon": "*",
-		"phpmailer/phpmailer": "^6.9",
-    "tecnickcom/tcpdf": "^6.8"
-    },
-    "require-dev": {
-        "phalcon/ide-stubs": "^4.1"
+      "php": "^8.3.1",
+      "ext-psr": "*",
+      "ext-mbstring": "*",
+      "ext-json": "*",
+      "ext-curl": "*",
+      "ext-gettext": "*",
+      "phalcon/cphalcon": "^3.4",
+      "ext-phalcon": "*",
+      "phpmailer/phpmailer": "^6.9",
+      "tecnickcom/tcpdf": "^6.8",
+        "phalcon/ide-stubs": "^5.9"
     }
 }

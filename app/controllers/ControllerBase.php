@@ -2,7 +2,7 @@
 
 namespace Pointerp\Controladores;
 
-use Phalcon\Di;
+use Phalcon\Di\Di;
 use Phalcon\Mvc\Controller;
 
 class ControllerBase extends Controller

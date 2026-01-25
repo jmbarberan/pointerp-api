@@ -43,6 +43,7 @@ class VentasController extends ControllerBase  {
     $clase = $this->dispatcher->getParam('clase');
     $desde = $this->dispatcher->getParam('desde');
     $hasta = $this->dispatcher->getParam('hasta');
+    $hasta .= " 23:59:59";
     $nsModelPrefix = ""; // "[Pointerp\Modelos\Ventas\VentasNano].";
     $condicion = "SucursalId = :suc:";
     $bindParams = [ 'suc' => intval($suc) ];
@@ -100,9 +101,9 @@ class VentasController extends ControllerBase  {
 
     if ($estado == 0) {
       if (strlen($condicion) > 0) {
-        $condicion .= " AND Estado = 0";
+        $condicion .= " AND Estado != 2";
       } else {
-        $condicion = "Estado = 0";
+        $condicion = "Estado != 2";
       }
     }
 
@@ -139,6 +140,8 @@ class VentasController extends ControllerBase  {
     } else {
       $sales = Ventas::find([
         'conditions' => $condicion,
+        'bind' => $bindParams,
+        'bindTypes' => $bindTypes,
         'order' => 'Fecha'
       ]);
       $jsonSales = json_encode($sales);
@@ -621,7 +624,7 @@ class VentasController extends ControllerBase  {
       }
       if ($datos->Id > 0) {
         // Traer movimiento por id y acualizar
-        $ven = Ventas::findFirstById($datos->id);
+        $ven = Ventas::findFirstById($datos->Id);
         $ven->Fecha = $datos->Fecha;
         $ven->SucursalId = $datos->SucursalId;
         $ven->BodegaId = $datos->BodegaId; // BodegaId
@@ -642,13 +645,8 @@ class VentasController extends ControllerBase  {
         $ven->Estado = $datos->Estado;
         $ven->Especie = $datos->Especie; // receta, servicio medico
         $ven->CEClaveAcceso = $datos->CEClaveAcceso;
-        $ven->CEAutorizacion = $datos->CEAutorizacion;
         $ven->CEAutorizaFecha = $datos->CEAutorizaFecha;
-        $ven->CEContenido = $datos->CEContenido;
-        $ven->CEEtapa = $datos->CEEtapa;
-        $ven->CERespuestaId = $datos->CERespuestaId;
         $ven->CERespuestaTipo = $datos->CERespuestaTipo;
-        $ven->CERespuestaMsj = $datos->CERespuestaMsj;
         $ven->Operador = $datos->Operador;
         if($ven->update()) {
           $ret->res = true;
@@ -674,6 +672,7 @@ class VentasController extends ControllerBase  {
               $ins->VentaId = $ven->Id;
             }
             if ($ins != null) {
+              $ins->ProductoId = $mi->ProductoId;
               $ins->Bodega = $mi->Bodega; // Bodega
               $ins->Cantidad = $mi->Cantidad;
               $ins->Precio = $mi->Precio;
@@ -687,7 +686,8 @@ class VentasController extends ControllerBase  {
               if ($mi->Id > 0) {
                 $ins->update();
               } else {
-                $ins->create();
+                $resinsertItem = $ins->create();
+                $id = $ins->Id;
               }
             }
             if ($datos->Tipo == FACTURA) {
@@ -762,13 +762,26 @@ class VentasController extends ControllerBase  {
         }
       } else {
         // Crear factura nueva
-        $vendoble = false;
-        if (!$vendoble) {
+        $uuidString = $datos->UCodigo;
+        $uuidBin = hex2bin(str_replace('-', '', $uuidString));
+        $ventaExiste = VentasMin::findFirst([
+          'conditions' => 'Identificador = :uuid:',
+          'bind'       => [ 'uuid' => $uuidBin ]
+        ]);
+        if ($ventaExiste) {
+          $ret->res = true;
+          $ret->ven = $ventaExiste;
+          $ret->cid = $ventaExiste->Id;
+          $ret->num = $ventaExiste->Numero;
+          $ret->msj = "La venta ya se encuentra registrada";
+          $this->response->setStatusCode(201, 'Ok');
+        } else {
           if ($generarCA && $datos->Tipo == 11) {
             $res = $this->generarClaveAcceso($datos->SucursalId);
             $datos->CEClaveAcceso = $res->clave;
             $datos->CERespuestaTipo = $res->secuencial;
           }
+          $datos->Identificador = $uuidBin;
           $respVta = $this->guardarVentaNueva($datos, 0, false, $version);
           $ret->res = $respVta->res;
           $ret->num = $respVta->ven->Numero;
@@ -903,8 +916,6 @@ class VentasController extends ControllerBase  {
             }
             $this->response->setStatusCode(201, 'Ok');
           }
-        } else {
-          $ret->msj = "El documento ya se encuentra registrado";
         } 
       }
     } catch (Exception $e) {
@@ -951,32 +962,27 @@ class VentasController extends ControllerBase  {
       'num' => 0
     ];
     
-    $vendoble = false;
-    try {
-      $fechaComparar = (new DateTime($datos->Fecha))->format('Y-m-d H:i:s');
-      $cmd = "SELECT Id FROM Pointerp\Modelos\Ventas\Ventas 
-        WHERE Tipo = :tipo: 
-        AND SucursalId = :sucursalId: 
-        AND Fecha = :fecha:";
-      $qry = new Query($cmd, Di::getDefault());
-      $rws = $qry->execute([
-          'tipo' => $datos->Tipo,
-          'sucursalId' => $datos->SucursalId,
-          'fecha' => $fechaComparar
-      ]);
-      $vendoble = $rws->count() > 0;
-    }
-    catch(Exception $ex) {
-      $ret->msj = $ex;
-    }
-
-    if (!$vendoble) {
+    $uuidString = $datos->UCodigo;
+    $uuidBin = hex2bin(str_replace('-', '', $uuidString));
+    $ventaExiste = VentasMin::findFirst([
+      'conditions' => 'Identificador = :uuid:',
+      'bind'       => [ 'uuid' => $uuidBin ]
+    ]);
+    if ($ventaExiste) {
+      $ret->res = true;
+      $ret->ven = $ventaExiste;
+      $ret->cid = $ventaExiste->Id;
+      $ret->num = $ventaExiste->Numero;
+      $ret->msj = "La venta ya se encuentra registrada";
+      $this->response->setStatusCode(201, 'Ok');
+    } else {
       $cobrado = $datos->Subtotal + $datos->SubtotalEx + $datos->Impuestos + $datos->Descuento + $datos->Recargo + $datos->Flete;
       if ($generarCA && $datos->Tipo == 11) {
         $res = $this->generarClaveAcceso($datos->SucursalId);
         $datos->CEClaveAcceso = $res->clave;
         $datos->CERespuestaTipo = $res->secuencial;
       }
+      $datos->Identificador = $uuidBin;
       $respVta = $this->guardarVentaNueva($datos, $cobrado, false);
       if ($respVta->res) {
         $vta = $respVta->ven;
@@ -1041,8 +1047,6 @@ class VentasController extends ControllerBase  {
         $ret->res = true;
         $ret->msj = "No se pudo crear el comprobante ni el cobro";
       }
-    } else {
-      $ret->msj = "El documento ya se encuentra registrado";
     }
     
     $this->response->setContentType('application/json', 'UTF-8');
@@ -1378,6 +1382,7 @@ class VentasController extends ControllerBase  {
           $guardar = false;
         }
       }
+
       if ($guardar) {
         $num = intval($this->ultimoNumeroVenta($datos->Tipo, $datos->SucursalId)) + 1;
         $ven = new Ventas();
@@ -1413,6 +1418,7 @@ class VentasController extends ControllerBase  {
         $ven->Comprobante = $datos->Comprobante;
         $ven->Contado = $cobrado > 0 ? 1 : 0;
         $ven->Operador = $datos->Operador;
+        $ven->Identificador = $datos->Identificador;
         if ($ven->create()) {
           $ret->res = true;
           $ret->cid = $ven->Id;

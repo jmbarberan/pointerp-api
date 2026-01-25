@@ -62,13 +62,21 @@ class OpenSSL implements CryptoToolKitInterface
 
     private function parsePKCS12($privKey, $passphrase)
     {
-        if (openssl_pkcs12_read($privKey, $infoCert, $passphrase)) {
+        $result = openssl_pkcs12_read($privKey, $infoCert, $passphrase);        
+        if ($result == '1') {
+            $this->x509Reader = openssl_x509_read($infoCert['cert']);
+            $this->parsePEM($infoCert['pkey'], $passphrase, $infoCert['cert']);
+        } else {
+            throw new \Exception("Unable to read the cert store");
+        }
+
+        /*if (openssl_pkcs12_read($privKey, $infoCert, $passphrase)) {
             $this->x509Reader = openssl_x509_read($infoCert['cert']);
 
             $this->parsePEM($infoCert['pkey'], $passphrase, $infoCert['cert']);
         } else {
             throw new \Exception("Unable to read the cert store");
-        }
+        }*/
     }
 
     private function parsePEM($privKey, $passphrase, $pubKey = null)

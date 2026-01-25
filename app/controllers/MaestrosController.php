@@ -369,7 +369,7 @@ class MaestrosController extends ControllerBase  {
     if (json_last_error() !== JSON_ERROR_NONE) {
         $nombre = 'Error de conversion';
     }
-    $nombreComercial = isset($data['contribuyente']['nombreComercial']) ? $data['contribuyente']['nombreComercial'] : null;
+    $nombreComercial = $data['contribuyente']['nombreComercial'] ?? null;
     if ($nombreComercial !== null) {
         $nombre = $nombreComercial;
     }

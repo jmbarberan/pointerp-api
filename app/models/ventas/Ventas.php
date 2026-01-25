@@ -31,6 +31,11 @@ class Ventas extends Modelo
       'reusable' => true,
       'alias'    => 'relItems'
     ]);
+    $this->hasMany('Id', VentasImpuestos::class, 'VentaId',
+    [
+      'reusable' => true,
+      'alias'    => 'relImpuestos'
+    ]);
   }
   
   public function jsonSerialize () : array {
@@ -63,6 +68,17 @@ class Ventas extends Modelo
           }
           array_push($items, $insItem);
         }
+      }
+      if ($this->relImpuestos != null) {   
+        $imps = [];
+        foreach ($this->relImpuestos as $it) {
+          if ($it->relImpuesto != null) {
+            $ins = $it->toArray();
+            $ins['relImpuesto'] = $it->relImpuesto->toArray();
+            array_push($imps, $ins);
+          }
+        }
+        $res['relImpuestos'] = $imps;
       }
       $res['relItems'] = $items;
     }

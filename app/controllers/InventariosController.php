@@ -822,7 +822,7 @@ class InventariosController extends ControllerBase  {
     }
     if (strlen($condicion) > 0) {
       $condicion .= ' AND ';
-      $condicion .= 'Estado = 0';
+      $condicion .= 'Estado != 2';
       $res = Movimientos::find([
         'conditions' => $condicion,
         'order' => 'Fecha'
@@ -1068,6 +1068,60 @@ class InventariosController extends ControllerBase  {
     $this->response->send();
   }
 
+  public function comparativoInventarioFisicoAction() {
+    $this->view->disable();
+    $fisicoId = $this->dispatcher->getParam('id');
+    $respuesta = (object) [
+      'result' => false,
+      'mensaje' => "La operacion no se pudo ejecutar correctamente",
+      "numero" => 0,
+      'data' => null,
+    ];
+
+    $movFisico = Movimientos::findFirstById($fisicoId);
+    if ($movFisico == null) {
+      $respuesta->mensaje = "No se encontro el inventario fisico";
+      $this->response->setStatusCode(404, 'Not found');
+      $this->response->setContentType('application/json', 'UTF-8');
+      $this->response->setContent(json_encode($respuesta));
+      $this->response->send();
+      return;
+    } else {
+      $respuesta->numero = $movFisico->Numero;
+      $itemsConsulta = [];
+      $itemsAjustar = MovimientosItems::find(['conditions' => "KardexId = $fisicoId"]);
+      foreach ($itemsAjustar as $item) {
+        $rwExiste = $this->exisenciaProductoBodega($item->ProductoId, $movFisico->BodegaId);
+        $prdExistencia = 0;
+        if ($rwExiste->count() > 0) {
+          $prdExistencia = $rwExiste[0]->Saldo;
+        }
+        if ($prdExistencia != $item->Cantidad) {
+          $prd = (object) [
+            'id' => $item->ProductoId,
+            'existencia' => $prdExistencia,
+            'conteo' => $item->Cantidad,
+            'relProducto' => $item->relProducto
+          ];
+          if ($prdExistencia < $item->Cantidad) {
+            $prd->cantidad = $item->Cantidad - $prdExistencia;
+          } else {
+            $prd->cantidad = $prdExistencia - $item->Cantidad;
+          }
+          $itemsConsulta[] = $prd;
+        }
+      }
+      $respuesta->result = true;
+      $respuesta->mensaje = "La operacion se ejecuto exitosamente";
+      $respuesta->data = $itemsConsulta;
+    }
+
+    $this->response->setStatusCode(200, 'Ok');
+    $this->response->setContentType('application/json', 'UTF-8');
+    $this->response->setContent(json_encode($respuesta));
+    $this->response->send();
+  }
+
   public function ajustarExistenciasFisicoAction() {
     $respuesta = (object) [
       'result' => false,
@@ -1075,10 +1129,9 @@ class InventariosController extends ControllerBase  {
       'data' => null,
     ];
     $this->view->disable();
-    $fisicoId = $this->dispatcher->getParam('id'); // $params->id;
-
+    $fisicoId = $this->dispatcher->getParam('id');    
     $movFisico = Movimientos::findFirstById($fisicoId);
-    if ($movFisico == false) {
+    if ($movFisico == null) {
       $respuesta->mensaje = "No se encontro el inventario fisico";
       $this->response->setStatusCode(404, 'Not found');
       $this->response->setContentType('application/json', 'UTF-8');
@@ -1125,6 +1178,7 @@ class InventariosController extends ControllerBase  {
       $completa = true;
       if (count($itemsSobrantes) > 0) {      
         $movAjusteSobrantes = new Movimientos();
+        $movAjusteSobrantes->setTransaction($transaction);
         $movAjusteSobrantes->BodegaId = $movFisico->BodegaId;
         $movAjusteSobrantes->SucursalId = $movFisico->SucursalId;
         $movAjusteSobrantes->Fecha = date('Y-m-d H:i:s');      
@@ -1137,6 +1191,7 @@ class InventariosController extends ControllerBase  {
         if ($movAjusteSobrantes->save()) {
           foreach ($itemsSobrantes as $item) {
             $itemSobrante = new MovimientosItems();
+            $itemSobrante->setTransaction($transaction);
             $itemSobrante->KardexId = $movAjusteSobrantes->Id;
             $itemSobrante->ProductoId = $item->id;
             $itemSobrante->Cantidad = $item->cantidad;
@@ -1154,6 +1209,7 @@ class InventariosController extends ControllerBase  {
 
       if (count($itemsFaltantes) > 0) {
         $movAjusteFaltantes = new Movimientos();
+        $movAjusteFaltantes->setTransaction($transaction);
         $movAjusteFaltantes->BodegaId = $movFisico->BodegaId;
         $movAjusteFaltantes->SucursalId = $movFisico->SucursalId;
         $movAjusteFaltantes->Fecha = date('Y-m-d H:i:s');
@@ -1166,6 +1222,7 @@ class InventariosController extends ControllerBase  {
         if ($movAjusteFaltantes->save()) {
           foreach ($itemsFaltantes as $item) {
             $itemFaltante = new MovimientosItems();
+            $itemFaltante->setTransaction($transaction);
             $itemFaltante->KardexId = $movAjusteFaltantes->Id;
             $itemFaltante->ProductoId = $item->id;
             $itemFaltante->Cantidad = $item->cantidad;

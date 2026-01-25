@@ -85,6 +85,10 @@ class InventariosRutas extends \Phalcon\Mvc\Router\Group
       'controller' => $controlador,
       'action'     => 'movimientoGuardar',
     ]);
+    $this->addGet('/movimientos/fisico/{id}/comparativo', [
+      'controller' => $controlador,
+      'action'     => 'comparativoInventarioFisico',
+    ]);
     $this->addPost('/movimientos/fisico/{id}/ajustar', [
       'controller' => $controlador,
       'action'     => 'ajustarExistenciasFisico',
